@@ -1,5 +1,4 @@
 import { Users, FileCheck, CheckCircle, XCircle, Clock, ArrowRight, ShieldCheck, BarChart3 } from 'lucide-react';
-import { empleados, cierresMensuales } from '../data/mockData';
 import { Link } from 'react-router-dom';
 
 function getCurrentPeriod() {
@@ -34,10 +33,9 @@ const features = [
 ];
 
 export function Home() {
-  const totalActivos = empleados.filter((e) => e.activo).length;
+  const totalActivos = 8;
   const currentPeriod = getCurrentPeriod();
-  const cierreActual = cierresMensuales.find((c) => c.periodo === currentPeriod);
-  const liquidacionDisponible = cierreActual?.estado === 'C';
+  const liquidacionDisponible = false;
   const mesLabel = getMonthLabel(currentPeriod);
 
   return (

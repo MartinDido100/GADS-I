@@ -1,14 +1,34 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { AppShell, Group, Stack, Text, Box, Avatar, ActionIcon } from '@mantine/core';
-import { Users, FileText, Clock, Bell } from 'lucide-react';
+import { AppShell, Group, Stack, Text, Box, Avatar, ActionIcon, Tooltip } from '@mantine/core';
+import { Users, FileText, Clock, Bell, LogOut, Calendar, ClipboardList, UserCircle } from 'lucide-react';
+// Bell se usa para el header notification icon — lo aprovecho también para nav
 import styles from './Layout.module.css';
+import { useAuth } from '../auth/AuthContext';
+import type { Rol } from '../types';
 
-const navItems = [
-  { to: '/app/empleados', icon: Users, label: 'Empleados' },
-  { to: '/app/cierre', icon: FileText, label: 'Cierre Mensual' },
+const allNavItems: { to: string; icon: typeof Users; label: string; roles: Rol[] }[] = [
+  { to: '/app/notificaciones',  icon: Bell,          label: 'Notificaciones',  roles: ['EMPLEADO', 'ADMINISTRADOR', 'CONTADOR'] },
+  { to: '/app/justificativos', icon: ClipboardList, label: 'Justificativos',  roles: ['EMPLEADO', 'ADMINISTRADOR'] },
+  { to: '/app/empleados',      icon: Users,         label: 'Empleados',       roles: ['ADMINISTRADOR'] },
+  { to: '/app/horarios',       icon: Calendar,      label: 'Horarios',        roles: ['ADMINISTRADOR'] },
+  { to: '/app/cierre',         icon: FileText,      label: 'Cierre Mensual',  roles: ['ADMINISTRADOR', 'CONTADOR'] },
+  { to: '/app/perfil',         icon: UserCircle,    label: 'Mi Perfil',       roles: ['EMPLEADO', 'ADMINISTRADOR', 'CONTADOR'] },
 ];
 
+const ROL_LABEL: Record<Rol, string> = {
+  EMPLEADO: 'Empleado',
+  ADMINISTRADOR: 'Administrador',
+  CONTADOR: 'Contador',
+};
+
+function getInitials(nombre: string) {
+  return nombre.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+}
+
 export function Layout() {
+  const { user, logout } = useAuth();
+  const navItems = allNavItems.filter((item) => user && item.roles.includes(user.rol));
+
   return (
     <AppShell
       layout="alt"
@@ -65,38 +85,30 @@ export function Layout() {
         {/* User */}
         <Box p={8} style={{ borderTop: '1px solid #1e293b' }}>
           <div className={styles.userRow}>
-            <Avatar color="red" size="sm" radius="xl">A</Avatar>
+            <Avatar color="red" size="sm" radius="xl">
+              {user ? getInitials(user.nombre) : '?'}
+            </Avatar>
             <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
               <Text size="sm" fw={500} c="#cbd5e1" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                Administrador
+                {user?.nombre ?? '—'}
               </Text>
               <Text size="xs" c="#475569" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                admin@digitalcheck
+                {user ? `${ROL_LABEL[user.rol]} · #${user.legajo}` : ''}
               </Text>
             </Stack>
+            <Tooltip label="Cerrar sesión" position="right" withArrow>
+              <ActionIcon variant="subtle" color="gray" onClick={logout} aria-label="Cerrar sesión">
+                <LogOut size={15} color="#94a3b8" />
+              </ActionIcon>
+            </Tooltip>
           </div>
         </Box>
       </AppShell.Navbar>
 
       {/* Top bar */}
       <AppShell.Header style={{ borderBottom: '1px solid #e2e8f0', background: '#fff' }}>
-        <Group h="100%" px="lg" justify="space-between">
+        <Group h="100%" px="lg">
           <Text size="sm" fw={500} c="#0f172a">DigitalCheck</Text>
-          <Group gap="xs">
-            <Box style={{ position: 'relative' }}>
-              <ActionIcon variant="subtle" color="gray" size="lg">
-                <Bell size={15} />
-              </ActionIcon>
-              <Box
-                style={{
-                  position: 'absolute', top: 7, right: 7,
-                  width: 7, height: 7, borderRadius: '50%', background: '#dc2626',
-                  pointerEvents: 'none',
-                }}
-              />
-            </Box>
-            <Avatar color="red" size="sm" radius="xl">A</Avatar>
-          </Group>
         </Group>
       </AppShell.Header>
 

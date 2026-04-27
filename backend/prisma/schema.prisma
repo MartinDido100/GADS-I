@@ -1,0 +1,158 @@
+// DigitalCheck — schema canónico
+// Basado en el ER del TP entregado (TP Gads1.docx, image1.png).
+// Cambios respecto al diagrama original:
+//  - Uso de enums (Rol, EntradaSalida, OrigenFichada, EstadoCierre, EstadoNovedad,
+//    OrigenNovedad) en lugar de char(1)/char(10) — type-safety y consistencia.
+//  - EMPLEADO incorpora campos `password_hash` y `rol` (decisión: el empleado
+//    es el usuario del sistema, sin tabla USUARIO separada).
+//  - TipoNovedad se siembra con valores fijos del PDF.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  EMPLEADO
+  ADMINISTRADOR
+  CONTADOR
+}
+
+enum EntradaSalida {
+  E
+  S
+}
+
+enum OrigenFichada {
+  BIOMETRICO
+  MANUAL
+  QR
+  API
+}
+
+enum EstadoCierre {
+  B // Borrador
+  C // Cerrado
+}
+
+enum EstadoNovedad {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+}
+
+enum OrigenNovedad {
+  AUTOMATICA
+  MANUAL
+}
+
+model Empleado {
+  legajo            Int      @id
+  nombre            String
+  dni               Int      @unique
+  cuil              String   @unique
+  fecha_ingreso     DateTime @db.Date
+  categoria_laboral String
+  activo            Boolean  @default(true)
+  rol               Rol      @default(EMPLEADO)
+  password_hash     String?  // null = aún no fijada por el admin
+
+  biometria         Biometria?
+  turnos            Turno[]
+  fichadas          Fichada[]            @relation("FichadasEmpleado")
+  fichadas_cargadas Fichada[]            @relation("FichadasCargadasPor")
+  novedades         Novedad[]
+  cierres           CierreMensual[]
+}
+
+model Biometria {
+  id_empleado    Int      @id
+  huella         String?
+  facial         String?
+  codigo_fichaje String?
+
+  empleado       Empleado @relation(fields: [id_empleado], references: [legajo], onDelete: Cascade)
+}
+
+model Horario {
+  id                       Int     @id @default(autoincrement())
+  descripcion              String
+  horario_entrada          String  // "HH:mm"
+  horario_retiro           String  // "HH:mm"
+  horas_a_trabajar         Int?    // para horarios flexibles
+  tolerancia_entrada       Int     @default(0) // minutos
+  tolerancia_retiro        Int     @default(0)
+  minutos_minimos_descanso Int     @default(0)
+  umbral_horas_extras      Int     @default(0) // minutos a partir de los cuales computa HE
+  activo                   Boolean @default(true)
+
+  turnos                   Turno[]
+}
+
+model Turno {
+  id          Int     @id @default(autoincrement())
+  id_horario  Int
+  id_empleado Int
+  dia         String  // "LUN" | "MAR" | "MIE" | "JUE" | "VIE" | "SAB" | "DOM"
+
+  horario     Horario  @relation(fields: [id_horario], references: [id])
+  empleado    Empleado @relation(fields: [id_empleado], references: [legajo], onDelete: Cascade)
+
+  @@unique([id_empleado, dia], name: "uq_empleado_dia")
+}
+
+model Fichada {
+  identidad             Int            @id @default(autoincrement())
+  id_empleado           Int
+  timestamp             DateTime
+  entrada_salida        EntradaSalida
+  origen                OrigenFichada
+  legajo_usuario_carga  Int?
+  activo                Boolean        @default(true)
+  id_correccion         Int?
+
+  empleado              Empleado       @relation("FichadasEmpleado", fields: [id_empleado], references: [legajo])
+  usuario_carga         Empleado?      @relation("FichadasCargadasPor", fields: [legajo_usuario_carga], references: [legajo])
+  corrige               Fichada?       @relation("Correccion", fields: [id_correccion], references: [identidad])
+  correcciones          Fichada[]      @relation("Correccion")
+
+  @@index([id_empleado, timestamp])
+}
+
+model TipoNovedad {
+  id_tipo_novedad Int       @id @default(autoincrement())
+  descripcion     String    @unique
+  novedades       Novedad[]
+}
+
+model Novedad {
+  id_novedad      Int           @id @default(autoincrement())
+  id_empleado     Int
+  fecha           DateTime      @db.Date
+  tipo_novedad    Int
+  origen          OrigenNovedad
+  estado          EstadoNovedad @default(PENDIENTE)
+  observacion     String?
+
+  empleado        Empleado      @relation(fields: [id_empleado], references: [legajo])
+  tipo            TipoNovedad   @relation(fields: [tipo_novedad], references: [id_tipo_novedad])
+
+  @@index([id_empleado, fecha])
+}
+
+model CierreMensual {
+  id                      Int           @id @default(autoincrement())
+  id_empleado             Int?          // null = cierre global del período
+  periodo                 DateTime      @db.Date
+  fecha_cierre            DateTime?
+  estado_borrador_cerrado EstadoCierre  @default(B)
+  ruta_archivo_exportado  String?
+
+  empleado                Empleado?     @relation(fields: [id_empleado], references: [legajo])
+
+  @@unique([id_empleado, periodo], name: "uq_empleado_periodo")
+}
