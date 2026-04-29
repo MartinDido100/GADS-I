@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: digitalcheck-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-digitalcheck}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-digitalcheck}
+      POSTGRES_DB: ${POSTGRES_DB:-digitalcheck}
+    volumes:
+      - digitalcheck-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-digitalcheck} -d ${POSTGRES_DB:-digitalcheck}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - digitalcheck
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    container_name: digitalcheck-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-digitalcheck}:${POSTGRES_PASSWORD:-digitalcheck}@postgres:5432/${POSTGRES_DB:-digitalcheck}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
+      PORT: 3001
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    networks:
+      - digitalcheck
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+    container_name: digitalcheck-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${PUBLIC_PORT:-80}:80"
+    networks:
+      - digitalcheck
+
+volumes:
+  digitalcheck-data:
+
+networks:
+  digitalcheck:
+    driver: bridge

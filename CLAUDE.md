@@ -54,16 +54,16 @@ Todos los usuarios son `EMPLEADO` con un campo `rol`:
 - **administrador**: todo lo del empleado + configuración de empleados, horarios, turnos, fichadas manuales, aprobación de novedades, cierre mensual.
 - **contador**: lectura del cierre mensual + descarga del CSV.
 
-## Pantallas (8 totales)
+## Pantallas (8 totales) — todas implementadas con API real
 
-1. Login (legajo + password)
-2. Main post-login con tabs (default: notificaciones)
-3. Centro de notificaciones (fichadas y novedades del día)
-4. Justificativos (empleado carga, admin aprueba)
-5. Perfil (solo lectura)
-6. Configuración de empleados (admin) — ya existe `EmpleadosConfig.tsx` con datos mock
-7. Horarios y turnos (admin) — falta
-8. Cierre mensual (admin + contador) — ya existe `CierreMensual.tsx` con datos mock
+1. Login (legajo + password) — `Login.tsx`
+2. Layout post-login con sidebar (default tab: notificaciones) — `Layout.tsx`
+3. Centro de notificaciones (fichadas del día/semana, filtros, registro manual admin) — `CentroNotificaciones.tsx`
+4. Justificativos (empleado carga, admin aprueba/rechaza, recálculo del motor) — `Justificativos.tsx`
+5. Perfil (datos del empleado + cambio de password) — `Perfil.tsx`
+6. Configuración de empleados (admin) — `EmpleadosConfig.tsx`
+7. Horarios y turnos (admin) — `HorariosConfig.tsx` + `AsignarTurnosModal.tsx`
+8. Cierre mensual (admin cierra/reabre, contador descarga CSV) — `CierreMensual.tsx`
 
 ## Motor de reglas (V1)
 
@@ -86,6 +86,10 @@ Las reglas son **parametrizables por horario** (tolerancias, umbrales). No hardc
 - **Sin passwords en el seed**. El admin las crea/setea a mano. El seed sólo crea los registros sin `password_hash` (campo nullable o placeholder vacío).
 - **Feriados fuera de alcance V1**. Sólo se distinguen domingos para HE al 100%.
 - **Alcance de la entrega**: todos los módulos del PDF deben quedar implementados (no parciales).
+- **Seed NO corre automáticamente**. Se eliminó el hook `prisma.seed` del `package.json` para que `prisma migrate dev` no pise la DB. El seed se corre a mano con `npm run seed`. Las passwords se setean por separado con `npm run set-password` (script en `prisma/set-password.ts`).
+- **Cierre mensual — modelo de doble registro**: por cada período hay un registro "global" (`id_empleado: NULL`) que guarda el estado B/C y la fecha de cierre. El resumen por empleado se calcula on-the-fly desde fichadas + novedades, no se persiste por empleado. La columna `ruta_archivo_exportado` no se usa todavía (el CSV se sirve directo).
+- **Export CSV requiere período cerrado**. Backend valida estado=C en `exportarCSV`; frontend deshabilita el botón si está en borrador.
+- **Fichadas inmutables — convención de correcciones**: corregir crea una nueva fila con `id_correccion` apuntando a la original y marca la original `activo: false`. El motor de reglas sólo considera `activo: true`.
 
 ## Convenciones
 
@@ -108,7 +112,12 @@ npm run dev                     # tsx watch
 npm run build
 npm run prisma:migrate          # crear migration
 npm run prisma:generate
-npm run seed
+npm run seed                    # solo a mano — NO corre automático
+
+# Setear passwords (post-seed o ad hoc)
+npm run set-password                              # admin 1001 → "admin123"
+npm run set-password -- 1002 admin123             # otros legajos
+npm run set-password -- 1001 nuevaPwd --force     # forzar cambio si ya tiene
 
 # Frontend
 cd frontend
@@ -119,6 +128,65 @@ npm run build
 ## Datos del grupo (TP entregado el 2026-04-12)
 
 Grupo 1, integrantes: Mathieu Santamaría Loiacono, Fabricio Martinez Solomita, Martín Didolich (el usuario), Alejo Lopez Rodofile, Juan Bianchi, Agustín Garcia Riveros, Juan Bernardez.
+
+## API — endpoints implementados
+
+```
+POST   /auth/login                         — público
+GET    /auth/me                            — auth
+POST   /auth/change-password               — auth
+
+GET    /empleados                          — auth
+GET    /empleados/:legajo                  — auth (EMPLEADO solo el propio)
+POST   /empleados                          — ADMIN
+PATCH  /empleados/:legajo                  — ADMIN
+POST   /empleados/:legajo/baja             — ADMIN
+POST   /empleados/:legajo/reactivar        — ADMIN
+POST   /empleados/:legajo/recalcular-novedades  — ADMIN (dispara motor de reglas)
+
+GET    /empleados/:legajo/turnos           — auth
+PUT    /empleados/:legajo/turnos           — ADMIN (reemplaza la semana entera)
+POST   /empleados/:legajo/turnos/:dia      — ADMIN (asigna 1 día)
+DELETE /empleados/:legajo/turnos/:dia      — ADMIN
+
+GET    /horarios                           — auth
+POST   /horarios                           — ADMIN
+PATCH  /horarios/:id                       — ADMIN
+POST   /horarios/:id/desactivar            — ADMIN
+POST   /horarios/:id/reactivar             — ADMIN
+
+GET    /fichadas                           — auth (EMPLEADO solo las propias)
+GET    /fichadas/:id                       — auth
+POST   /fichadas                           — ADMIN
+POST   /fichadas/:id/corregir              — ADMIN
+
+GET    /novedades                          — auth (EMPLEADO solo las propias)
+GET    /novedades/tipos                    — auth
+GET    /novedades/:id                      — auth
+POST   /novedades                          — auth (EMPLEADO solo de sí mismo)
+POST   /novedades/:id/aprobar              — ADMIN
+POST   /novedades/:id/rechazar             — ADMIN
+DELETE /novedades/:id                      — auth (dueño si es PENDIENTE)
+
+GET    /cierres                            — ADMIN + CONTADOR
+GET    /cierres/:periodo                   — ADMIN + CONTADOR (formato YYYY-MM)
+GET    /cierres/:periodo/export            — ADMIN + CONTADOR (CSV, requiere cerrado)
+POST   /cierres/:periodo/cerrar            — ADMIN
+POST   /cierres/:periodo/reabrir           — ADMIN
+```
+
+## Motor de reglas — comportamiento
+
+`reglasService.calcularNovedades(legajo, desde, hasta)` es **idempotente**: borra las novedades AUTOMATICAS PENDIENTES del período y las regenera. No toca novedades MANUALES ni APROBADAS/RECHAZADAS.
+
+Itera día por día del rango. Si el empleado no tiene turno asignado para ese día, lo saltea (no es laboral). Detecta:
+- **Ausencia injustificada**: día con turno pero sin entrada
+- **Tardanza**: minutos sobre `tolerancia_entrada` — observación incluye `"<N> min"` que el cierre parsea
+- **Salida anticipada**: salida antes de `horario_retiro - tolerancia_retiro`
+- **HE 50% / HE 100%**: salida posterior a `horario_retiro + umbral_horas_extras`. Domingo → 100%, resto → 50%
+- **Doble fichada**: < 5 min mismo tipo. NO genera novedad, sólo retorna en `detalle` para mostrar al usuario
+
+El cierre mensual parsea las observaciones (`/(\d+) min/`) para sumar minutos de tardanza/HE — si cambiás el formato de la observación rompés el cálculo del cierre.
 
 ## Recursos / referencias en el repo
 
