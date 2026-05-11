@@ -70,6 +70,28 @@ export async function registrarFichada(input: FichadaInput) {
   });
 }
 
+// Simula una lectura biométrica: determina automáticamente E o S según la
+// última fichada activa del día para ese empleado.
+export async function registrarBiometrico(legajo: number) {
+  const empleado = await empleadoRepo.findByLegajo(legajo);
+  if (!empleado) throw new HttpError(404, 'NOT_FOUND', 'Empleado no encontrado');
+  if (!empleado.activo) {
+    throw new HttpError(400, 'EMPLEADO_INACTIVO', 'Empleado inactivo');
+  }
+
+  const ahora = new Date();
+  const ultima = await repo.findUltimaFichadaDelDia(legajo, ahora);
+  const tipo: EntradaSalida = (!ultima || ultima.entrada_salida === 'S') ? 'E' : 'S';
+
+  return repo.create({
+    empleado: { connect: { legajo } },
+    timestamp: ahora,
+    entrada_salida: tipo,
+    origen: OrigenFichada.BIOMETRICO,
+    activo: true,
+  });
+}
+
 export async function corregirFichada(
   identidad: number,
   nueva: Omit<FichadaInput, 'id_correccion'>,

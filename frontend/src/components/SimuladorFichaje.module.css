@@ -1,0 +1,62 @@
+.toastStack {
+  position: fixed;
+  top: 64px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border-left: 3px solid transparent;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  min-width: 220px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  animation: toastIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.toastEntrada { border-color: #22c55e; }
+.toastSalida  { border-color: #f59e0b; }
+.toastErr     { border-color: #dc2626; }
+
+.toastDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+.toastEntrada .toastDot { background: #22c55e; }
+.toastSalida  .toastDot { background: #f59e0b; }
+.toastErr     .toastDot { background: #dc2626; }
+
+.toastBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.toastNombre {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.toastTipo {
+  font-size: 11px;
+  color: #64748b;
+}

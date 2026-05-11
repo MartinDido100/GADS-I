@@ -78,6 +78,19 @@ export const create: RequestHandler = async (req, res, next) => {
   }
 };
 
+export const biometrico: RequestHandler = async (req, res, next) => {
+  const parsed = z.object({ legajo: z.coerce.number().int().positive() }).safeParse(req.body);
+  if (!parsed.success) {
+    return next(new HttpError(400, 'INVALID_INPUT', 'legajo requerido'));
+  }
+  try {
+    const fichada = await fichadaService.registrarBiometrico(parsed.data.legajo);
+    res.status(201).json(fichada);
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const corregir: RequestHandler = async (req, res, next) => {
   const parsed = correccionSchema.safeParse(req.body);
   if (!parsed.success) {

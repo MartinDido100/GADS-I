@@ -10,6 +10,9 @@ fichadaRoutes.use(requireAuth);
 fichadaRoutes.get('/', ctrl.list);
 fichadaRoutes.get('/:id', ctrl.get);
 
-// Mutaciones: solo administrador.
+// Biométrico: cualquier autenticado puede simular su propia lectura.
+fichadaRoutes.post('/biometrico', ctrl.biometrico);
+
+// Mutaciones manuales: solo administrador.
 fichadaRoutes.post('/', requireRole('ADMINISTRADOR'), ctrl.create);
 fichadaRoutes.post('/:id/corregir', requireRole('ADMINISTRADOR'), ctrl.corregir);

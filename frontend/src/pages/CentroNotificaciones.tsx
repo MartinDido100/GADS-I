@@ -4,12 +4,14 @@ import {
   Table, ThemeIcon, SimpleGrid, SegmentedControl, TextInput,
 } from '@mantine/core';
 import {
-  Plus, AlertCircle, LogIn, LogOut, Bell, Search, Calendar,
+  Plus, AlertCircle, LogIn, LogOut, Bell, Search, Calendar, UtensilsCrossed,
 } from 'lucide-react';
-import { listFichadas, type Fichada } from '../lib/fichadasApi';
+import { listFichadas, createFichada, type Fichada } from '../lib/fichadasApi';
+import { listEmpleados } from '../lib/empleadosApi';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { RegistrarFichadaModal } from '../components/RegistrarFichadaModal';
+import type { Empleado } from '../types';
 
 function todayIso() {
   const d = new Date();
@@ -47,6 +49,119 @@ const ORIGEN_COLOR: Record<string, string> = {
   QR: 'violet',
   API: 'gray',
 };
+
+// ── Panel de almuerzo ──────────────────────────────────────────────────────
+
+interface AlmuerzoBtnProps {
+  legajo: number;
+  nombre: string;
+  onFichado: () => void;
+}
+
+function AlmuerzoPanel({ legajo, nombre, onFichado }: AlmuerzoBtnProps) {
+  const [loadingSE, setLoadingSE] = useState(false);
+  const [loadingRS, setLoadingRS] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function registrar(tipo: 'S' | 'E', label: string, setLoading: (v: boolean) => void) {
+    setLoading(true);
+    setMsg(null);
+    try {
+      await createFichada({
+        id_empleado: legajo,
+        timestamp: new Date().toISOString(),
+        entrada_salida: tipo,
+        origen: 'MANUAL',
+      });
+      setMsg({ text: `${label} registrada`, ok: true });
+      onFichado();
+      setTimeout(() => setMsg(null), 3000);
+    } catch (err) {
+      setMsg({ text: err instanceof ApiError ? err.message : 'Error', ok: false });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card withBorder radius="md" padding="md" style={{ borderColor: '#fef3c7', background: '#fffbeb' }}>
+      <Group justify="space-between" wrap="nowrap">
+        <Group gap="sm">
+          <ThemeIcon size={36} radius="md" color="yellow" variant="light">
+            <UtensilsCrossed size={18} />
+          </ThemeIcon>
+          <Stack gap={0}>
+            <Text size="sm" fw={700} c="dark">Almuerzo</Text>
+            <Text size="xs" c="dimmed">{nombre}</Text>
+          </Stack>
+        </Group>
+        <Group gap="xs">
+          <Button
+            size="xs"
+            color="yellow"
+            variant="filled"
+            loading={loadingSE}
+            onClick={() => void registrar('S', 'Salida almuerzo', setLoadingSE)}
+          >
+            Salir a almorzar
+          </Button>
+          <Button
+            size="xs"
+            color="teal"
+            variant="filled"
+            loading={loadingRS}
+            onClick={() => void registrar('E', 'Regreso almuerzo', setLoadingRS)}
+          >
+            Regresar de almuerzo
+          </Button>
+        </Group>
+      </Group>
+      {msg && (
+        <Text size="xs" mt={6} c={msg.ok ? 'teal' : 'red'} fw={500}>
+          {msg.text}
+        </Text>
+      )}
+    </Card>
+  );
+}
+
+// ── Admin: panel para todos los empleados activos ─────────────────────────
+
+function AlmuerzoPanelAdmin({ onFichado }: { onFichado: () => void }) {
+  const [empleados, setEmpleados] = useState<Empleado[]>([]);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    listEmpleados({ activo: true })
+      .then((all) => setEmpleados(all.sort((a, b) => a.legajo - b.legajo)))
+      .catch(() => {});
+  }, []);
+
+  return (
+    <Stack gap="xs">
+      <Group>
+        <Button
+          size="xs"
+          variant="light"
+          color="yellow"
+          leftSection={<UtensilsCrossed size={14} />}
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {expanded ? 'Ocultar registro de almuerzo' : 'Registrar almuerzo / regreso'}
+        </Button>
+      </Group>
+      {expanded && (
+        <SimpleGrid cols={2} spacing="sm">
+          {empleados.map((e) => (
+            <AlmuerzoPanel key={e.legajo} legajo={e.legajo} nombre={e.nombre} onFichado={onFichado} />
+          ))}
+        </SimpleGrid>
+      )}
+    </Stack>
+  );
+}
+
+// ── Página principal ───────────────────────────────────────────────────────
 
 export function CentroNotificaciones() {
   const { user } = useAuth();
@@ -156,6 +271,15 @@ export function CentroNotificaciones() {
           </Group>
         </Card>
       </SimpleGrid>
+
+      {/* Almuerzo: empleado ve el suyo, admin ve panel expandible para todos */}
+      {isAdmin ? (
+        <AlmuerzoPanelAdmin onFichado={() => void load()} />
+      ) : (
+        user && (
+          <AlmuerzoPanel legajo={user.legajo} nombre={user.nombre} onFichado={() => void load()} />
+        )
+      )}
 
       <Card withBorder shadow="xs" radius="md" padding={0}>
         <Group p="md" style={{ borderBottom: '1px solid #f1f5f9' }} wrap="nowrap">

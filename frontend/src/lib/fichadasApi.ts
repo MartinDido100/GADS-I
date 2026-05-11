@@ -45,6 +45,13 @@ export function createFichada(input: FichadaCreateInput) {
   });
 }
 
+export function fichadaBiometrico(legajo: number) {
+  return api<Fichada>('/fichadas/biometrico', {
+    method: 'POST',
+    body: JSON.stringify({ legajo }),
+  });
+}
+
 export function corregirFichada(id: number, input: { timestamp: string; entrada_salida: EntradaSalida }) {
   return api<Fichada>(`/fichadas/${id}/corregir`, {
     method: 'POST',

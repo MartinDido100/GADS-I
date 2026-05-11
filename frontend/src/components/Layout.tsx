@@ -4,6 +4,7 @@ import { Users, FileText, Clock, Bell, LogOut, Calendar, ClipboardList, UserCirc
 // Bell se usa para el header notification icon — lo aprovecho también para nav
 import styles from './Layout.module.css';
 import { useAuth } from '../auth/AuthContext';
+import { SimuladorFichaje } from './SimuladorFichaje';
 import type { Rol } from '../types';
 
 const allNavItems: { to: string; icon: typeof Users; label: string; roles: Rol[] }[] = [
@@ -116,6 +117,8 @@ export function Layout() {
       <AppShell.Main style={{ background: '#f8fafc' }}>
         <Outlet />
       </AppShell.Main>
+
+      <SimuladorFichaje />
     </AppShell>
   );
 }
