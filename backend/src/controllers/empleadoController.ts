@@ -113,3 +113,17 @@ export const reactivar: RequestHandler = async (req, res, next) => {
     next(err);
   }
 };
+
+export const setPassword: RequestHandler = async (req, res, next) => {
+  const parsed = z.object({ password: z.string().min(6, 'Mínimo 6 caracteres') }).safeParse(req.body);
+  if (!parsed.success) {
+    return next(new HttpError(400, 'INVALID_INPUT', parsed.error.issues[0]?.message ?? 'Input inválido'));
+  }
+  try {
+    const legajo = parseLegajo(req.params.legajo);
+    await empleadoService.setPassword(legajo, parsed.data.password);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+};

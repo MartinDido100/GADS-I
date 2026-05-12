@@ -43,3 +43,10 @@ export function bajaEmpleado(legajo: number) {
 export function reactivarEmpleado(legajo: number) {
   return api<Empleado>(`/empleados/${legajo}/reactivar`, { method: 'POST' });
 }
+
+export function setPasswordEmpleado(legajo: number, password: string) {
+  return api<{ ok: boolean }>(`/empleados/${legajo}/set-password`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+}

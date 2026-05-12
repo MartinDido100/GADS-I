@@ -60,3 +60,7 @@ export function existsByCuil(cuil: string, excludeLegajo?: number) {
 export function existsByLegajo(legajo: number) {
   return prisma.empleado.findUnique({ where: { legajo }, select: { legajo: true } });
 }
+
+export function updatePasswordHash(legajo: number, hash: string) {
+  return prisma.empleado.update({ where: { legajo }, data: { password_hash: hash }, select: { legajo: true } });
+}

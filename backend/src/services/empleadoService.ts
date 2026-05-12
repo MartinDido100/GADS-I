@@ -1,4 +1,5 @@
 import { Rol } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import * as repo from '../repositories/empleadoRepository.js';
 import { HttpError } from '../middleware/errorHandler.js';
 
@@ -83,4 +84,11 @@ export async function reactivar(legajo: number) {
   const existente = await repo.findByLegajo(legajo);
   if (!existente) throw new HttpError(404, 'NOT_FOUND', 'Empleado no encontrado');
   return repo.setActivo(legajo, true);
+}
+
+export async function setPassword(legajo: number, password: string) {
+  const existente = await repo.findByLegajo(legajo);
+  if (!existente) throw new HttpError(404, 'NOT_FOUND', 'Empleado no encontrado');
+  const hash = await bcrypt.hash(password, 10);
+  await repo.updatePasswordHash(legajo, hash);
 }

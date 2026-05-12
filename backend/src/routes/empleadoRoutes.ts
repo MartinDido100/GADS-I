@@ -15,3 +15,4 @@ empleadoRoutes.post('/', requireRole('ADMINISTRADOR'), ctrl.create);
 empleadoRoutes.patch('/:legajo', requireRole('ADMINISTRADOR'), ctrl.update);
 empleadoRoutes.post('/:legajo/baja', requireRole('ADMINISTRADOR'), ctrl.baja);
 empleadoRoutes.post('/:legajo/reactivar', requireRole('ADMINISTRADOR'), ctrl.reactivar);
+empleadoRoutes.post('/:legajo/set-password', requireRole('ADMINISTRADOR'), ctrl.setPassword);

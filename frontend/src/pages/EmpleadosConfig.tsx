@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react';
 import {
   Title, Text, SimpleGrid, Card, Group, Stack, TextInput, Button,
   SegmentedControl, Table, Badge, Box, ThemeIcon, Loader, Center,
-  Menu, ActionIcon, Alert,
+  Menu, ActionIcon, Alert, Modal, PasswordInput,
 } from '@mantine/core';
 import {
   Search, UserCheck, UserX, Users, Plus, MoreVertical,
-  Edit, UserMinus, UserPlus, AlertCircle, Calendar,
+  Edit, UserMinus, UserPlus, AlertCircle, Calendar, KeyRound,
 } from 'lucide-react';
 import type { Empleado, Rol } from '../types';
 import {
-  listEmpleados, bajaEmpleado, reactivarEmpleado,
+  listEmpleados, bajaEmpleado, reactivarEmpleado, setPasswordEmpleado,
 } from '../lib/empleadosApi';
 import { ApiError } from '../lib/api';
 import { EmpleadoFormModal } from '../components/EmpleadoFormModal';
@@ -75,6 +75,12 @@ export function EmpleadosConfig() {
   const [editing, setEditing] = useState<Empleado | null>(null);
   const [turnosOpen, setTurnosOpen] = useState(false);
   const [turnosFor, setTurnosFor] = useState<Empleado | null>(null);
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [pwdFor, setPwdFor] = useState<Empleado | null>(null);
+  const [pwdValue, setPwdValue] = useState('');
+  const [pwdConfirm, setPwdConfirm] = useState('');
+  const [pwdError, setPwdError] = useState<string | null>(null);
+  const [pwdLoading, setPwdLoading] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -119,6 +125,30 @@ export function EmpleadosConfig() {
       handleSaved(updated);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Error al dar de baja');
+    }
+  }
+
+  function openSetPassword(emp: Empleado) {
+    setPwdFor(emp);
+    setPwdValue('');
+    setPwdConfirm('');
+    setPwdError(null);
+    setPwdOpen(true);
+  }
+
+  async function handleSetPassword() {
+    if (!pwdFor) return;
+    if (pwdValue.length < 6) { setPwdError('Mínimo 6 caracteres'); return; }
+    if (pwdValue !== pwdConfirm) { setPwdError('Las contraseñas no coinciden'); return; }
+    setPwdError(null);
+    setPwdLoading(true);
+    try {
+      await setPasswordEmpleado(pwdFor.legajo, pwdValue);
+      setPwdOpen(false);
+    } catch (err) {
+      setPwdError(err instanceof ApiError ? err.message : 'Error al guardar');
+    } finally {
+      setPwdLoading(false);
     }
   }
 
@@ -282,6 +312,12 @@ export function EmpleadosConfig() {
                         >
                           Asignar turnos
                         </Menu.Item>
+                        <Menu.Item
+                          leftSection={<KeyRound size={14} />}
+                          onClick={() => openSetPassword(emp)}
+                        >
+                          Establecer contraseña
+                        </Menu.Item>
                         {emp.activo ? (
                           <Menu.Item
                             color="red"
@@ -337,6 +373,49 @@ export function EmpleadosConfig() {
         onClose={() => setTurnosOpen(false)}
         empleado={turnosFor}
       />
+
+      <Modal
+        opened={pwdOpen}
+        onClose={() => setPwdOpen(false)}
+        title={
+          <Group gap="xs">
+            <KeyRound size={16} />
+            <Text fw={700} size="md">
+              Establecer contraseña — {pwdFor?.nombre}
+            </Text>
+          </Group>
+        }
+        centered
+        size="sm"
+      >
+        <Stack gap="md">
+          <PasswordInput
+            label="Nueva contraseña"
+            placeholder="Mínimo 6 caracteres"
+            value={pwdValue}
+            onChange={(e) => setPwdValue(e.currentTarget.value)}
+          />
+          <PasswordInput
+            label="Confirmar contraseña"
+            placeholder="Repetí la contraseña"
+            value={pwdConfirm}
+            onChange={(e) => setPwdConfirm(e.currentTarget.value)}
+          />
+          {pwdError && (
+            <Alert icon={<AlertCircle size={14} />} color="red" variant="light" radius="md">
+              {pwdError}
+            </Alert>
+          )}
+          <Group justify="flex-end" gap="sm">
+            <Button variant="subtle" color="gray" onClick={() => setPwdOpen(false)}>
+              Cancelar
+            </Button>
+            <Button color="red" loading={pwdLoading} onClick={() => void handleSetPassword()}>
+              Guardar
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
