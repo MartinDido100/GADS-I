@@ -62,11 +62,23 @@ function DetailPanel({ r }: { r: ResumenEmpleado }) {
             {r.tardanzas.map((t) => {
               const d = new Date(t.fecha + 'T00:00:00Z');
               const label = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+              const duracion = t.minutos >= 60
+                ? `${Math.floor(t.minutos / 60)}h ${t.minutos % 60}min`
+                : `${t.minutos} min`;
               return (
-                <Box key={t.fecha} style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, padding: '3px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Text size="xs" fw={700} c="orange.8">{label}</Text>
-                  <Box style={{ width: 1, height: 10, background: '#fed7aa' }} />
-                  <Text size="xs" c="orange.6">{t.minutos} min</Text>
+                <Box
+                  key={t.fecha}
+                  style={{
+                    background: t.justificada ? '#f0fdf4' : '#fff7ed',
+                    border: `1px solid ${t.justificada ? '#bbf7d0' : '#fed7aa'}`,
+                    borderRadius: 6, padding: '3px 8px',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  <Text size="xs" fw={700} c={t.justificada ? 'green.7' : 'orange.8'}>{label}</Text>
+                  <Box style={{ width: 1, height: 10, background: t.justificada ? '#bbf7d0' : '#fed7aa' }} />
+                  <Text size="xs" c={t.justificada ? 'green.6' : 'orange.6'}>{duracion}</Text>
+                  {t.justificada && <Text size="xs" c="green.6" fw={600}>✓</Text>}
                 </Box>
               );
             })}
@@ -319,12 +331,9 @@ export function CierreMensual() {
                           : <Text size="sm" c="gray.4">—</Text>}
                       </Table.Td>
                       <Table.Td style={{ verticalAlign: 'top', paddingTop: 12 }}>
-                        {emp.ausencias_injustificadas + emp.ausencias_justificadas > 0 ? (
-                          <Group gap={4}>
-                            {emp.ausencias_injustificadas > 0 && <Badge variant="light" color="red" size="sm">{emp.ausencias_injustificadas}</Badge>}
-                            {emp.ausencias_justificadas > 0 && <Badge variant="light" color="green" size="sm">{emp.ausencias_justificadas} just.</Badge>}
-                          </Group>
-                        ) : <Text size="sm" c="gray.4">—</Text>}
+                        {emp.ausencias_injustificadas + emp.ausencias_justificadas > 0
+                          ? <Badge variant="light" color="red" size="sm">{emp.ausencias_injustificadas + emp.ausencias_justificadas}</Badge>
+                          : <Text size="sm" c="gray.4">—</Text>}
                       </Table.Td>
                       <Table.Td style={{ verticalAlign: 'top', paddingTop: 12 }}>
                         {emp.horas_extra_50 > 0

@@ -21,8 +21,8 @@ const empleadosSeed = [
 
 // Tipos de novedad enumerados en el PDF (Funcionalidad 4).
 const tiposNovedad = [
-  'Tardanza injustificada',
-  'Ausencia injustificada',
+  'Tardanza',
+  'Ausencia',
   'Horas extra al 50%',
   'Horas extra al 100%',
   'Salida anticipada',

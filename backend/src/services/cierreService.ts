@@ -5,11 +5,21 @@ import * as empleadoRepo from '../repositories/empleadoRepository.js';
 import * as turnoRepo from '../repositories/turnoRepository.js';
 import { HttpError } from '../middleware/errorHandler.js';
 
+function parseHHmm(s: string): number {
+  const [h, m] = s.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+function minutosDelDia(d: Date): number {
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+
 // ── Tipos de salida ────────────────────────────────────────────────────────
 
 export interface TardanzaDetalle {
   fecha: string;   // YYYY-MM-DD
   minutos: number;
+  justificada: boolean;
 }
 
 export interface ResumenEmpleado {
@@ -44,6 +54,19 @@ const DIA_MAP: Record<number, string> = {
   0: 'DOM', 1: 'LUN', 2: 'MAR', 3: 'MIE', 4: 'JUE', 5: 'VIE', 6: 'SAB',
 };
 
+function diasEnRango(desde: Date, hasta: Date): Date[] {
+  const dias: Date[] = [];
+  const cur = new Date(desde);
+  cur.setUTCHours(0, 0, 0, 0);
+  const end = new Date(hasta);
+  end.setUTCHours(0, 0, 0, 0);
+  while (cur <= end) {
+    dias.push(new Date(cur));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return dias;
+}
+
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -69,26 +92,24 @@ async function calcularResumenEmpleado(
   desde: Date,
   hasta: Date,
 ): Promise<ResumenEmpleado> {
-  // Fichadas activas del período
+  // Fichadas activas del período (excluye almuerzo — no afectan E/S laboral)
   const fichadas = await prisma.fichada.findMany({
     where: {
       id_empleado: legajo,
       activo: true,
+      origen: { not: 'ALMUERZO' },
       timestamp: { gte: desde, lte: hasta },
     },
     orderBy: { timestamp: 'asc' },
   });
 
-  // Novedades aprobadas del período
+  // Novedades aprobadas del período (para ausencias justificadas y HE)
   const novedades = await prisma.novedad.findMany({
-    where: {
-      id_empleado: legajo,
-      fecha: { gte: desde, lte: hasta },
-    },
+    where: { id_empleado: legajo, fecha: { gte: desde, lte: hasta } },
     include: { tipo: true },
   });
 
-  // Agrupar fichadas por día
+  // Agrupar fichadas por día UTC
   const fichadasPorDia = new Map<string, typeof fichadas>();
   for (const f of fichadas) {
     const key = isoDate(f.timestamp);
@@ -96,11 +117,12 @@ async function calcularResumenEmpleado(
     fichadasPorDia.get(key)!.push(f);
   }
 
-  // Agrupar novedades por tipo y fecha
+  const dias = diasEnRango(desde, hasta);
+  let diasTrabajados = 0;
+  const tardanzasDetalle: TardanzaDetalle[] = [];
   const ausenciasInjust = new Set<string>();
   const ausenciasJust = new Set<string>();
-  let tardanzasMin = 0;
-  const tardanzasDetalle: TardanzaDetalle[] = [];
+  const tardanzasAprobadas = new Set<string>(); // fechas con tardanza aprobada por el admin
   let heMin50 = 0;
   let heMin100 = 0;
   let salidasAnticipadas = 0;
@@ -108,44 +130,75 @@ async function calcularResumenEmpleado(
 
   for (const n of novedades) {
     if (n.estado !== EstadoNovedad.APROBADA) continue;
-
     const fecha = isoDate(n.fecha);
     const desc = n.tipo.descripcion.toLowerCase();
-
     novedadesAprobadas++;
 
-    if (desc.includes('ausencia injustificada')) ausenciasInjust.add(fecha);
+    if (desc.includes('tardanza')) tardanzasAprobadas.add(fecha);
 
+    if (desc === 'ausencia') {
+      const tieneAdjunto = (n.observacion ?? '').includes('[Adjunto: sí]');
+      if (tieneAdjunto) {
+        ausenciasJust.add(fecha);
+        ausenciasInjust.delete(fecha);
+      } else {
+        ausenciasInjust.add(fecha);
+      }
+    }
     if (desc.includes('ausencia') &&
         (desc.includes('licencia') || desc.includes('vacaciones') || desc.includes('permiso'))) {
       ausenciasJust.add(fecha);
-      ausenciasInjust.delete(fecha); // justificada prevalece sobre injustificada
+      ausenciasInjust.delete(fecha);
     }
-
-    if (desc.includes('tardanza')) {
-      const match = (n.observacion ?? '').match(/(\d+) min/);
-      const minutos = match ? Number(match[1]) : 0;
-      tardanzasMin += minutos;
-      tardanzasDetalle.push({ fecha, minutos });
-    }
-
     if (desc.includes('extra al 50%')) {
       const match = (n.observacion ?? '').match(/(\d+) min/);
       heMin50 += match ? Number(match[1]) : 0;
     }
-
     if (desc.includes('extra al 100%')) {
       const match = (n.observacion ?? '').match(/(\d+) min/);
       heMin100 += match ? Number(match[1]) : 0;
     }
-
     if (desc.includes('salida anticipada')) salidasAnticipadas++;
   }
 
-  // Días trabajados = días con al menos una entrada
-  const diasTrabajados = [...fichadasPorDia.entries()]
-    .filter(([, fs]) => fs.some((f) => f.entrada_salida === 'E'))
-    .length;
+  // Iterar día a día usando turnos y horarios reales
+  for (const dia of dias) {
+    const isoKey = isoDate(dia);
+    const diaSemana = DIA_MAP[dia.getUTCDay()]!;
+
+    const turno = await turnoRepo.getHorarioParaEmpleadoYDia(legajo, diaSemana);
+    if (!turno?.horario) continue; // día no laboral para este empleado
+
+    const horario = turno.horario;
+    const minEntradaEsperada = parseHHmm(horario.horario_entrada);
+    const minRetiroEsperado  = parseHHmm(horario.horario_retiro);
+    const tolEntrada         = horario.tolerancia_entrada;
+    const tolRetiro          = horario.tolerancia_retiro;
+
+    const fichadasDia = fichadasPorDia.get(isoKey) ?? [];
+    const entradas = fichadasDia.filter((f) => f.entrada_salida === 'E');
+    const salidas  = fichadasDia.filter((f) => f.entrada_salida === 'S');
+
+    const primerEntrada = entradas[0];
+    const ultimaSalida  = salidas.at(-1);
+
+    // Día trabajado: tiene entrada Y salida dentro del horario (salida >= retiro - tolerancia)
+    if (primerEntrada && ultimaSalida) {
+      const minSalidaReal = minutosDelDia(ultimaSalida.timestamp);
+      if (minSalidaReal >= minRetiroEsperado - tolRetiro) {
+        diasTrabajados++;
+      }
+    }
+
+    // Tardanza: calculada desde fichadas; justificada si el admin aprobó la novedad
+    if (primerEntrada) {
+      const minEntradaReal = minutosDelDia(primerEntrada.timestamp);
+      if (minEntradaReal > minEntradaEsperada + tolEntrada) {
+        const minutos = minEntradaReal - minEntradaEsperada;
+        tardanzasDetalle.push({ fecha: isoKey, minutos, justificada: tardanzasAprobadas.has(isoKey) });
+      }
+    }
+  }
 
   return {
     legajo,

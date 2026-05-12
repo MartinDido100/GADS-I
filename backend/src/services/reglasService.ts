@@ -5,8 +5,8 @@ import * as turnoRepo from '../repositories/turnoRepository.js';
 
 // Mapa canónico: descripción del seed → clave interna usada en el motor.
 const TIPO_KEY = {
-  TARDANZA:       'Tardanza injustificada',
-  AUSENCIA:       'Ausencia injustificada',
+  TARDANZA:       'Tardanza',
+  AUSENCIA:       'Ausencia',
   HE_50:          'Horas extra al 50%',
   HE_100:         'Horas extra al 100%',
   SALIDA_ANTICI:  'Salida anticipada',

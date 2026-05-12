@@ -1,7 +1,7 @@
 import { api } from './api';
 
 export type EntradaSalida = 'E' | 'S';
-export type OrigenFichada = 'BIOMETRICO' | 'MANUAL' | 'QR' | 'API';
+export type OrigenFichada = 'BIOMETRICO' | 'MANUAL' | 'QR' | 'API' | 'ALMUERZO';
 
 export interface Fichada {
   identidad: number;

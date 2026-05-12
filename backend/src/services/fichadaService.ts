@@ -88,7 +88,7 @@ export async function registrarAlmuerzo(legajo: number, tipo: EntradaSalida) {
     empleado: { connect: { legajo } },
     timestamp: new Date(),
     entrada_salida: tipo,
-    origen: OrigenFichada.MANUAL,
+    origen: OrigenFichada.ALMUERZO,
     activo: true,
   });
 }

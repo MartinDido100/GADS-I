@@ -61,6 +61,7 @@ export function findUltimaFichadaDelDia(legajo: number, fecha: Date) {
       id_empleado: legajo,
       activo: true,
       timestamp: { gte: inicio, lte: fin },
+      origen: { not: 'ALMUERZO' }, // el almuerzo no afecta el toggle E/S biométrico
     },
     orderBy: { timestamp: 'desc' },
   });

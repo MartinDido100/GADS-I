@@ -45,8 +45,8 @@ const ESTADO_LABEL: Record<EstadoNovedad, string> = {
 
 // Tipos que requieren archivo adjunto (simulado con checkbox)
 const TIPOS_CON_ADJUNTO = [
-  'tardanza injustificada',
-  'ausencia injustificada',
+  'tardanza',
+  'ausencia',
   'licencia por enfermedad',
   'licencia por examen',
   'permiso especial',
@@ -254,6 +254,80 @@ function RecalcularModal({ opened, onClose, onDone, empleados }: RecalcularModal
   );
 }
 
+// ── Modal de aprobación ──────────────────────────────────────────────────────
+
+interface AprobarModalProps {
+  novedad: Novedad | null;
+  onClose: () => void;
+  onAprobada: () => void;
+}
+
+function AprobarModal({ novedad, onClose, onAprobada }: AprobarModalProps) {
+  const [tieneAdjunto, setTieneAdjunto] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (novedad) { setTieneAdjunto(false); setError(null); }
+  }, [novedad]);
+
+  async function handleConfirmar() {
+    if (!novedad) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const obsBase = (novedad.observacion ?? '').replace(/ \[Adjunto: (sí|no)\]/, '').trim();
+      const sufijo = ` [Adjunto: ${tieneAdjunto ? 'sí' : 'no'}]`;
+      await aprobarNovedad(novedad.id_novedad, (obsBase + sufijo).trim());
+      onAprobada();
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Error al aprobar');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal
+      opened={novedad !== null}
+      onClose={onClose}
+      title={<Text fw={700} size="md">Aprobar novedad</Text>}
+      size="sm"
+      centered
+    >
+      <Stack gap="md">
+        {novedad && (
+          <Box p="sm" style={{ background: '#f8fafc', borderRadius: 8 }}>
+            <Text size="sm" fw={600} c="dark">{novedad.tipo.descripcion}</Text>
+            <Text size="xs" c="dimmed" mt={2}>
+              {novedad.empleado.nombre} — {formatFecha(novedad.fecha)}
+            </Text>
+            {novedad.observacion && (
+              <Text size="xs" c="dimmed" mt={4}>
+                {(novedad.observacion).replace(/ \[Adjunto: (sí|no)\]/, '')}
+              </Text>
+            )}
+          </Box>
+        )}
+        <Checkbox
+          label="Se adjuntó documentación respaldatoria"
+          description="Certificado, comprobante u otro archivo presentado por el empleado"
+          checked={tieneAdjunto}
+          onChange={(e) => setTieneAdjunto(e.currentTarget.checked)}
+        />
+        {error && <Alert icon={<AlertCircle size={14} />} color="red" variant="light">{error}</Alert>}
+        <Group justify="flex-end" gap="sm">
+          <Button variant="subtle" color="gray" onClick={onClose}>Cancelar</Button>
+          <Button color="green" loading={loading} leftSection={<CheckCircle size={14} />} onClick={() => void handleConfirmar()}>
+            Aprobar
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 // ── Pantalla principal ───────────────────────────────────────────────────────
 
 export function Justificativos() {
@@ -271,6 +345,7 @@ export function Justificativos() {
   const [recalcOpen, setRecalcOpen] = useState(false);
   const [recalcDetalle, setRecalcDetalle] = useState<string[] | null>(null);
   const [accionLoading, setAccionLoading] = useState<number | null>(null);
+  const [aprobarNov, setAprobarNov] = useState<Novedad | null>(null);
 
   async function load() {
     setLoading(true);
@@ -311,11 +386,8 @@ export function Justificativos() {
     rechazadas: novedades.filter((n) => n.estado === 'RECHAZADA').length,
   }), [novedades]);
 
-  async function handleAprobar(id: number) {
-    setAccionLoading(id);
-    try { await aprobarNovedad(id); void load(); }
-    catch (err) { setError(err instanceof ApiError ? err.message : 'Error'); }
-    finally { setAccionLoading(null); }
+  function handleAbrirAprobar(nov: Novedad) {
+    setAprobarNov(nov);
   }
 
   async function handleRechazar(id: number) {
@@ -499,8 +571,7 @@ export function Justificativos() {
                           <Tooltip label="Aprobar" withArrow>
                             <ActionIcon
                               variant="subtle" color="green" size="sm"
-                              loading={accionLoading === n.id_novedad}
-                              onClick={() => handleAprobar(n.id_novedad)}
+                              onClick={() => handleAbrirAprobar(n)}
                             >
                               <CheckCircle size={14} />
                             </ActionIcon>
@@ -563,6 +634,14 @@ export function Justificativos() {
           onClose={() => setRecalcOpen(false)}
           onDone={(detalle) => { setRecalcDetalle(detalle); void load(); }}
           empleados={empleados}
+        />
+      )}
+
+      {isAdmin && (
+        <AprobarModal
+          novedad={aprobarNov}
+          onClose={() => setAprobarNov(null)}
+          onAprobada={() => void load()}
         />
       )}
     </Stack>

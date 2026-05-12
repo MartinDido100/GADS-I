@@ -49,6 +49,7 @@ const ORIGEN_LABEL: Record<string, string> = {
   MANUAL: 'Manual',
   QR: 'QR',
   API: 'API',
+  ALMUERZO: 'Almuerzo',
 };
 
 const ORIGEN_COLOR: Record<string, string> = {
@@ -56,6 +57,7 @@ const ORIGEN_COLOR: Record<string, string> = {
   MANUAL: 'orange',
   QR: 'violet',
   API: 'gray',
+  ALMUERZO: 'yellow',
 };
 
 // ── Panel de almuerzo ──────────────────────────────────────────────────────
@@ -69,24 +71,33 @@ interface AlmuerzoBtnProps {
 // isAdmin=true → usa createFichada (ADMIN, legajo explícito)
 // isAdmin=false → usa fichadaAlmuerzo (cualquier auth, usa legajo del token)
 function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoBtnProps & { isAdmin?: boolean }) {
-  // null = cargando, 'fuera' = está almorzando (última MANUAL del día fue S), 'dentro' = no salió o ya volvió
-  const [estado, setEstado] = useState<'dentro' | 'fuera' | null>(null);
+  // null=cargando, 'sin_entrada'=no entró o ya salió, 'dentro'=entró y no almorzó, 'almorzando'=salió a almorzar
+  const [estado, setEstado] = useState<'sin_entrada' | 'dentro' | 'almorzando' | null>(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  // Determina el estado actual consultando las fichadas MANUAL del día
   async function refreshEstado() {
     try {
       const { desde, hasta } = localDayRange(todayIso());
       const fichadas = await listFichadas({ legajo, desde, hasta });
-      // Busca la última fichada MANUAL activa del día (las de almuerzo son MANUAL)
-      const manuales = fichadas
-        .filter((f) => f.activo && f.origen === 'MANUAL')
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      const ultima = manuales[0];
-      setEstado(!ultima || ultima.entrada_salida === 'E' ? 'dentro' : 'fuera');
+      const activas = fichadas.filter((f) => f.activo).sort((a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+
+      // Última fichada no-almuerzo determina si el empleado está "en la oficina"
+      const ultimaNormal = activas.find((f) => f.origen !== 'ALMUERZO');
+      const estaEnOficina = ultimaNormal?.entrada_salida === 'E';
+
+      if (!estaEnOficina) {
+        setEstado('sin_entrada');
+        return;
+      }
+
+      // Si está en la oficina, ver si está almorzando (última fichada de almuerzo fue S)
+      const ultimaAlmuerzo = activas.find((f) => f.origen === 'ALMUERZO');
+      setEstado(ultimaAlmuerzo?.entrada_salida === 'S' ? 'almorzando' : 'dentro');
     } catch {
-      setEstado('dentro'); // fallback: mostrar "salir"
+      setEstado('sin_entrada');
     }
   }
 
@@ -101,12 +112,12 @@ function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoB
           id_empleado: legajo,
           timestamp: new Date().toISOString(),
           entrada_salida: tipo,
-          origen: 'MANUAL',
+          origen: 'ALMUERZO',
         });
       } else {
         await fichadaAlmuerzo(tipo);
       }
-      setEstado(tipo === 'S' ? 'fuera' : 'dentro');
+      setEstado(tipo === 'S' ? 'almorzando' : 'dentro');
       setMsg({ text: `${label} registrada`, ok: true });
       onFichado();
       setTimeout(() => setMsg(null), 3000);
@@ -116,6 +127,9 @@ function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoB
       setLoading(false);
     }
   }
+
+  // No mostrar el panel si el empleado no está en la oficina
+  if (estado !== null && estado === 'sin_entrada') return null;
 
   return (
     <Card withBorder radius="md" padding="md" style={{ borderColor: '#fef3c7', background: '#fffbeb' }}>
@@ -390,7 +404,17 @@ export function CentroNotificaciones() {
                   )}
 
                   <Table.Td>
-                    {f.entrada_salida === 'E' ? (
+                    {f.origen === 'ALMUERZO' ? (
+                      f.entrada_salida === 'S' ? (
+                        <Badge variant="light" color="yellow" leftSection={<UtensilsCrossed size={10} />}>
+                          Salida almuerzo
+                        </Badge>
+                      ) : (
+                        <Badge variant="light" color="teal" leftSection={<UtensilsCrossed size={10} />}>
+                          Fin almuerzo
+                        </Badge>
+                      )
+                    ) : f.entrada_salida === 'E' ? (
                       <Badge variant="light" color="green" leftSection={<LogIn size={10} />}>
                         Entrada
                       </Badge>

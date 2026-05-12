@@ -32,6 +32,7 @@ enum OrigenFichada {
   MANUAL
   QR
   API
+  ALMUERZO
 }
 
 enum EstadoCierre {

@@ -3,6 +3,7 @@ import { api } from './api';
 export interface TardanzaDetalle {
   fecha: string;
   minutos: number;
+  justificada: boolean;
 }
 
 export interface ResumenEmpleado {
