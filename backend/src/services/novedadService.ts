@@ -68,10 +68,10 @@ export async function rechazarNovedad(id: number, observacion?: string) {
   return repo.updateEstado(id, EstadoNovedad.RECHAZADA, observacion);
 }
 
-export async function eliminarNovedad(id: number) {
+export async function eliminarNovedad(id: number, esAdmin = false) {
   const n = await repo.findById(id);
   if (!n) throw new HttpError(404, 'NOT_FOUND', 'Novedad no encontrada');
-  if (n.estado !== EstadoNovedad.PENDIENTE) {
+  if (!esAdmin && n.estado !== EstadoNovedad.PENDIENTE) {
     throw new HttpError(400, 'ESTADO_INVALIDO', 'Solo se pueden eliminar novedades pendientes');
   }
   return repo.deleteNovedad(id);

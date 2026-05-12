@@ -45,6 +45,13 @@ export function createFichada(input: FichadaCreateInput) {
   });
 }
 
+export function fichadaAlmuerzo(tipo: 'E' | 'S') {
+  return api<Fichada>('/fichadas/almuerzo', {
+    method: 'POST',
+    body: JSON.stringify({ entrada_salida: tipo }),
+  });
+}
+
 export function fichadaBiometrico(legajo: number) {
   return api<Fichada>('/fichadas/biometrico', {
     method: 'POST',

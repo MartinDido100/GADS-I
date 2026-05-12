@@ -85,7 +85,7 @@ export function Perfil() {
     try {
       await api('/auth/change-password', {
         method: 'POST',
-        body: JSON.stringify({ password_actual: oldPw, password_nueva: newPw }),
+        body: JSON.stringify({ actual: oldPw, nueva: newPw }),
       });
       setPwSuccess(true);
       setOldPw(''); setNewPw(''); setConfirmPw('');

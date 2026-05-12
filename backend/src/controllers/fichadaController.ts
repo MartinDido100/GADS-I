@@ -78,6 +78,25 @@ export const create: RequestHandler = async (req, res, next) => {
   }
 };
 
+export const almuerzo: RequestHandler = async (req, res, next) => {
+  const parsed = z.object({
+    entrada_salida: z.nativeEnum(EntradaSalida),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    return next(new HttpError(400, 'INVALID_INPUT', 'entrada_salida requerido (E o S)'));
+  }
+  try {
+    // El empleado solo puede registrar almuerzo de sí mismo.
+    const fichada = await fichadaService.registrarAlmuerzo(
+      req.user!.legajo,
+      parsed.data.entrada_salida,
+    );
+    res.status(201).json(fichada);
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const biometrico: RequestHandler = async (req, res, next) => {
   const parsed = z.object({ legajo: z.coerce.number().int().positive() }).safeParse(req.body);
   if (!parsed.success) {

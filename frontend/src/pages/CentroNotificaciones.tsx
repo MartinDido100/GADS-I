@@ -6,7 +6,7 @@ import {
 import {
   Plus, AlertCircle, LogIn, LogOut, Bell, Search, Calendar, UtensilsCrossed,
 } from 'lucide-react';
-import { listFichadas, createFichada, type Fichada } from '../lib/fichadasApi';
+import { listFichadas, fichadaAlmuerzo, createFichada, type Fichada } from '../lib/fichadasApi';
 import { listEmpleados } from '../lib/empleadosApi';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
@@ -58,7 +58,9 @@ interface AlmuerzoBtnProps {
   onFichado: () => void;
 }
 
-function AlmuerzoPanel({ legajo, nombre, onFichado }: AlmuerzoBtnProps) {
+// isAdmin=true → usa createFichada (ADMIN, legajo explícito)
+// isAdmin=false → usa fichadaAlmuerzo (cualquier auth, usa legajo del token)
+function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoBtnProps & { isAdmin?: boolean }) {
   const [loadingSE, setLoadingSE] = useState(false);
   const [loadingRS, setLoadingRS] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -67,12 +69,16 @@ function AlmuerzoPanel({ legajo, nombre, onFichado }: AlmuerzoBtnProps) {
     setLoading(true);
     setMsg(null);
     try {
-      await createFichada({
-        id_empleado: legajo,
-        timestamp: new Date().toISOString(),
-        entrada_salida: tipo,
-        origen: 'MANUAL',
-      });
+      if (isAdmin) {
+        await createFichada({
+          id_empleado: legajo,
+          timestamp: new Date().toISOString(),
+          entrada_salida: tipo,
+          origen: 'MANUAL',
+        });
+      } else {
+        await fichadaAlmuerzo(tipo);
+      }
       setMsg({ text: `${label} registrada`, ok: true });
       onFichado();
       setTimeout(() => setMsg(null), 3000);
@@ -153,7 +159,7 @@ function AlmuerzoPanelAdmin({ onFichado }: { onFichado: () => void }) {
       {expanded && (
         <SimpleGrid cols={2} spacing="sm">
           {empleados.map((e) => (
-            <AlmuerzoPanel key={e.legajo} legajo={e.legajo} nombre={e.nombre} onFichado={onFichado} />
+            <AlmuerzoPanel key={e.legajo} legajo={e.legajo} nombre={e.nombre} onFichado={onFichado} isAdmin />
           ))}
         </SimpleGrid>
       )}

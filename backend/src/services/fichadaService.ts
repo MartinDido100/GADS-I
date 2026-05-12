@@ -70,6 +70,22 @@ export async function registrarFichada(input: FichadaInput) {
   });
 }
 
+// Permite al propio empleado declarar salida/regreso de almuerzo.
+// A diferencia del biométrico, el tipo E/S se pasa explícitamente.
+export async function registrarAlmuerzo(legajo: number, tipo: EntradaSalida) {
+  const empleado = await empleadoRepo.findByLegajo(legajo);
+  if (!empleado) throw new HttpError(404, 'NOT_FOUND', 'Empleado no encontrado');
+  if (!empleado.activo) throw new HttpError(400, 'EMPLEADO_INACTIVO', 'Empleado inactivo');
+
+  return repo.create({
+    empleado: { connect: { legajo } },
+    timestamp: new Date(),
+    entrada_salida: tipo,
+    origen: OrigenFichada.MANUAL,
+    activo: true,
+  });
+}
+
 // Simula una lectura biométrica: determina automáticamente E o S según la
 // última fichada activa del día para ese empleado.
 export async function registrarBiometrico(legajo: number) {

@@ -206,8 +206,8 @@ export function EmpleadosConfig() {
         <StatCard icon={<UserX size={22} />}     label="Inactivos"          value={totalInactivos}   color="gray"  />
       </SimpleGrid>
 
-      {/* Table card */}
-      <Card withBorder shadow="xs" radius="md" padding={0}>
+      {/* Table card — scrollbar-gutter stable evita el layout shift al filtrar */}
+      <Card withBorder shadow="xs" radius="md" padding={0} style={{ overflowY: 'auto', scrollbarGutter: 'stable' }}>
         <Group p="md" style={{ borderBottom: '1px solid #f1f5f9' }} wrap="nowrap">
           <TextInput
             placeholder="Buscar por nombre o legajo..."
@@ -231,7 +231,16 @@ export function EmpleadosConfig() {
         {loading ? (
           <Center py="xl"><Loader /></Center>
         ) : (
-          <Table striped highlightOnHover withColumnBorders={false} verticalSpacing="sm">
+          <Table striped highlightOnHover withColumnBorders={false} verticalSpacing="sm" style={{ tableLayout: 'fixed', width: '100%' }}>
+            <colgroup>
+              <col style={{ width: 80 }} />   {/* Legajo */}
+              <col />                          {/* Empleado — toma el espacio restante */}
+              <col style={{ width: 130 }} />  {/* Rol */}
+              <col style={{ width: 100 }} />  {/* Categoría */}
+              <col style={{ width: 150 }} />  {/* Fecha de ingreso */}
+              <col style={{ width: 90 }} />   {/* Estado */}
+              <col style={{ width: 50 }} />   {/* Acciones */}
+            </colgroup>
             <Table.Thead style={{ background: '#f8fafc' }}>
               <Table.Tr>
                 {['Legajo', 'Empleado', 'Rol', 'Categoría', 'Fecha de ingreso', 'Estado', ''].map((h) => (

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, Card, PasswordInput, Stack, Text, TextInput, Title, Alert, Group,
 } from '@mantine/core';
@@ -10,8 +10,6 @@ import { ApiError } from '../lib/api';
 export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/app';
 
   const [legajo, setLegajo] = useState('');
   const [password, setPassword] = useState('');
@@ -24,7 +22,7 @@ export function Login() {
     setSubmitting(true);
     try {
       await login(Number(legajo), password);
-      navigate(from, { replace: true });
+      navigate('/app/notificaciones', { replace: true });
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
       else setError('No se pudo conectar con el servidor');

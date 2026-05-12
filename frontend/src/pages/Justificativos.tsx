@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   Title, Text, Card, Group, Stack, Button, Box, Badge, Loader, Center, Alert,
   Table, SegmentedControl, TextInput, Modal, Select, Textarea, ActionIcon,
-  Tooltip, SimpleGrid, ThemeIcon,
+  Tooltip, SimpleGrid, ThemeIcon, Checkbox,
 } from '@mantine/core';
 import {
-  Plus, AlertCircle, Search, CheckCircle, XCircle, Clock, RefreshCw, Trash2,
+  Plus, AlertCircle, Search, CheckCircle, XCircle, Clock, RefreshCw, Trash2, Paperclip,
 } from 'lucide-react';
 import {
   listNovedades, listTiposNovedad, createNovedad, aprobarNovedad,
@@ -43,6 +43,19 @@ const ESTADO_LABEL: Record<EstadoNovedad, string> = {
   RECHAZADA: 'Rechazada',
 };
 
+// Tipos que requieren archivo adjunto (simulado con checkbox)
+const TIPOS_CON_ADJUNTO = [
+  'tardanza injustificada',
+  'ausencia injustificada',
+  'licencia por enfermedad',
+  'licencia por examen',
+  'permiso especial',
+];
+
+function requiereAdjunto(descripcion: string) {
+  return TIPOS_CON_ADJUNTO.some((t) => descripcion.toLowerCase().includes(t));
+}
+
 // ── Modal para crear justificativo (empleado) o novedad manual (admin) ──────
 
 interface NuevaNovedadModalProps {
@@ -60,8 +73,12 @@ function NuevaNovedadModal({ opened, onClose, onSaved, tipos, empleados, miLegaj
   const [fecha, setFecha] = useState(todayIso());
   const [tipoId, setTipoId] = useState<string | null>(null);
   const [obs, setObs] = useState('');
+  const [tieneAdjunto, setTieneAdjunto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const tipoSeleccionado = tipos.find((t) => String(t.id_tipo_novedad) === tipoId);
+  const mostrarAdjunto = tipoSeleccionado ? requiereAdjunto(tipoSeleccionado.descripcion) : false;
 
   useEffect(() => {
     if (!opened) return;
@@ -69,6 +86,7 @@ function NuevaNovedadModal({ opened, onClose, onSaved, tipos, empleados, miLegaj
     setFecha(todayIso());
     setTipoId(null);
     setObs('');
+    setTieneAdjunto(false);
     setError(null);
   }, [opened, isAdmin, miLegajo]);
 
@@ -78,11 +96,13 @@ function NuevaNovedadModal({ opened, onClose, onSaved, tipos, empleados, miLegaj
     setError(null);
     setSubmitting(true);
     try {
+      const obsBase = obs.trim();
+      const adjuntoSuffix = mostrarAdjunto ? (tieneAdjunto ? ' [Adjunto: sí]' : ' [Adjunto: no]') : '';
       await createNovedad({
         id_empleado: Number(legajo),
         fecha,
         tipo_novedad: Number(tipoId),
-        observacion: obs || undefined,
+        observacion: (obsBase + adjuntoSuffix).trim() || undefined,
       });
       onSaved();
       onClose();
@@ -131,6 +151,19 @@ function NuevaNovedadModal({ opened, onClose, onSaved, tipos, empleados, miLegaj
             onChange={(e) => setObs(e.currentTarget.value)}
             minRows={2}
           />
+          {mostrarAdjunto && (
+            <Checkbox
+              label={
+                <Group gap={6}>
+                  <Paperclip size={14} />
+                  <span>Archivo adjunto presentado</span>
+                </Group>
+              }
+              checked={tieneAdjunto}
+              onChange={(e) => setTieneAdjunto(e.currentTarget.checked)}
+              description="Marcá si adjuntás documentación respaldatoria (licencia, certificado, etc.)"
+            />
+          )}
           {error && <Alert icon={<AlertCircle size={16} />} color="red" variant="light">{error}</Alert>}
           <Group justify="flex-end" gap="sm">
             <Button variant="subtle" color="gray" onClick={onClose}>Cancelar</Button>
@@ -404,8 +437,8 @@ export function Justificativos() {
             <Table.Thead style={{ background: '#f8fafc' }}>
               <Table.Tr>
                 {(isAdmin
-                  ? ['Empleado', 'Fecha', 'Tipo', 'Origen', 'Estado', 'Observación', '']
-                  : ['Fecha', 'Tipo', 'Origen', 'Estado', 'Observación', '']
+                  ? ['Empleado', 'Fecha', 'Tipo', 'Origen', 'Estado', 'Observación', 'Adjunto', '']
+                  : ['Fecha', 'Tipo', 'Origen', 'Estado', 'Observación', 'Adjunto', '']
                 ).map((h) => (
                   <Table.Th key={h}
                     style={{ color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -442,35 +475,49 @@ export function Justificativos() {
                     </Badge>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="xs" c="dimmed" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {n.observacion ?? '—'}
+                    <Text size="xs" c="dimmed" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {(n.observacion ?? '').replace(/ \[Adjunto: (sí|no)\]/, '') || '—'}
                     </Text>
                   </Table.Td>
                   <Table.Td>
-                    {n.estado === 'PENDIENTE' && (
-                      <Group gap={4} wrap="nowrap">
-                        {isAdmin && (
-                          <>
-                            <Tooltip label="Aprobar" withArrow>
-                              <ActionIcon
-                                variant="subtle" color="green" size="sm"
-                                loading={accionLoading === n.id_novedad}
-                                onClick={() => handleAprobar(n.id_novedad)}
-                              >
-                                <CheckCircle size={14} />
-                              </ActionIcon>
-                            </Tooltip>
-                            <Tooltip label="Rechazar" withArrow>
-                              <ActionIcon
-                                variant="subtle" color="red" size="sm"
-                                loading={accionLoading === n.id_novedad}
-                                onClick={() => handleRechazar(n.id_novedad)}
-                              >
-                                <XCircle size={14} />
-                              </ActionIcon>
-                            </Tooltip>
-                          </>
-                        )}
+                    {requiereAdjunto(n.tipo.descripcion) ? (
+                      n.observacion?.includes('[Adjunto: sí]') ? (
+                        <Badge variant="light" color="green" size="sm" leftSection={<Paperclip size={10} />}>Sí</Badge>
+                      ) : n.observacion?.includes('[Adjunto: no]') ? (
+                        <Badge variant="light" color="gray" size="sm">No</Badge>
+                      ) : (
+                        <Text size="xs" c="dimmed">—</Text>
+                      )
+                    ) : (
+                      <Text size="xs" c="dimmed">—</Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    <Group gap={4} wrap="nowrap">
+                      {isAdmin && n.estado === 'PENDIENTE' && (
+                        <>
+                          <Tooltip label="Aprobar" withArrow>
+                            <ActionIcon
+                              variant="subtle" color="green" size="sm"
+                              loading={accionLoading === n.id_novedad}
+                              onClick={() => handleAprobar(n.id_novedad)}
+                            >
+                              <CheckCircle size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="Rechazar" withArrow>
+                            <ActionIcon
+                              variant="subtle" color="red" size="sm"
+                              loading={accionLoading === n.id_novedad}
+                              onClick={() => handleRechazar(n.id_novedad)}
+                            >
+                              <XCircle size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </>
+                      )}
+                      {/* Admin elimina cualquier estado; empleado solo sus pendientes */}
+                      {(isAdmin || n.estado === 'PENDIENTE') && (
                         <Tooltip label="Eliminar" withArrow>
                           <ActionIcon
                             variant="subtle" color="gray" size="sm"
@@ -480,15 +527,15 @@ export function Justificativos() {
                             <Trash2 size={14} />
                           </ActionIcon>
                         </Tooltip>
-                      </Group>
-                    )}
+                      )}
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
 
               {filtered.length === 0 && (
                 <Table.Tr>
-                  <Table.Td colSpan={isAdmin ? 7 : 6}>
+                  <Table.Td colSpan={isAdmin ? 8 : 7}>
                     <Text ta="center" size="sm" c="dimmed" py="xl">
                       No hay novedades en este período.
                     </Text>

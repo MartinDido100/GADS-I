@@ -91,7 +91,7 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
     if (req.user!.rol === 'EMPLEADO' && n.id_empleado !== req.user!.legajo) {
       throw new HttpError(403, 'FORBIDDEN', 'No tenés acceso a esta novedad');
     }
-    await service.eliminarNovedad(id);
+    await service.eliminarNovedad(id, req.user!.rol === 'ADMINISTRADOR');
     res.status(204).end();
   } catch (e) { next(e); }
 }
