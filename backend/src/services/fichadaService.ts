@@ -19,8 +19,9 @@ export interface ListFilter {
   hasta?: string;
 }
 
-function toUtcDate(dateStr: string, endOfDay = false): Date {
-  // Normalize to YYYY-MM-DD and interpret as UTC midnight (or end of day)
+function parseFilterDate(dateStr: string, endOfDay = false): Date {
+  // Si ya viene con hora (ISO completo), usarlo directo; si es solo YYYY-MM-DD, asumir UTC
+  if (dateStr.length > 10) return new Date(dateStr);
   const day = dateStr.slice(0, 10);
   return new Date(`${day}T${endOfDay ? '23:59:59' : '00:00:00'}Z`);
 }
@@ -28,8 +29,8 @@ function toUtcDate(dateStr: string, endOfDay = false): Date {
 export function listFichadas(filter: ListFilter = {}) {
   return repo.findAll({
     legajo: filter.legajo,
-    desde: filter.desde ? toUtcDate(filter.desde) : undefined,
-    hasta: filter.hasta ? toUtcDate(filter.hasta, true) : undefined,
+    desde: filter.desde ? parseFilterDate(filter.desde) : undefined,
+    hasta: filter.hasta ? parseFilterDate(filter.hasta, true) : undefined,
   });
 }
 

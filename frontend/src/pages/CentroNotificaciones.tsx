@@ -18,6 +18,14 @@ function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Retorna [inicioUTC, finUTC] para un día completo en la timezone local del cliente
+function localDayRange(isoDate: string): { desde: string; hasta: string } {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const inicio = new Date(y!, m! - 1, d!, 0, 0, 0, 0);
+  const fin    = new Date(y!, m! - 1, d!, 23, 59, 59, 999);
+  return { desde: inicio.toISOString(), hasta: fin.toISOString() };
+}
+
 function getInitials(nombre: string) {
   return nombre.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 }
@@ -69,8 +77,8 @@ function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoB
   // Determina el estado actual consultando las fichadas MANUAL del día
   async function refreshEstado() {
     try {
-      const hoy = todayIso();
-      const fichadas = await listFichadas({ legajo, desde: hoy, hasta: hoy });
+      const { desde, hasta } = localDayRange(todayIso());
+      const fichadas = await listFichadas({ legajo, desde, hasta });
       // Busca la última fichada MANUAL activa del día (las de almuerzo son MANUAL)
       const manuales = fichadas
         .filter((f) => f.activo && f.origen === 'MANUAL')
@@ -209,12 +217,14 @@ export function CentroNotificaciones() {
     try {
       const filter: { desde?: string; hasta?: string } = {};
       if (rango === 'hoy') {
-        filter.desde = todayIso();
-        filter.hasta = todayIso();
+        const { desde, hasta } = localDayRange(todayIso());
+        filter.desde = desde;
+        filter.hasta = hasta;
       } else if (rango === 'semana') {
         const d = new Date();
         d.setDate(d.getDate() - 7);
-        filter.desde = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        d.setHours(0, 0, 0, 0);
+        filter.desde = d.toISOString();
       }
       setFichadas(await listFichadas(filter));
     } catch (err) {

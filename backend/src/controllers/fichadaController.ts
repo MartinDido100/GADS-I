@@ -18,8 +18,8 @@ const correccionSchema = z.object({
 
 const listQuerySchema = z.object({
   legajo: z.coerce.number().int().positive().optional(),
-  desde: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
-  hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+  desde: z.string().min(10).optional(),
+  hasta: z.string().min(10).optional(),
 });
 
 function parseId(raw: string | undefined): number {
