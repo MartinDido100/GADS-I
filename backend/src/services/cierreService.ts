@@ -107,35 +107,35 @@ async function calcularResumenEmpleado(
   let novedadesAprobadas = 0;
 
   for (const n of novedades) {
+    if (n.estado !== EstadoNovedad.APROBADA) continue;
+
     const fecha = isoDate(n.fecha);
     const desc = n.tipo.descripcion.toLowerCase();
 
-    if (n.estado === EstadoNovedad.APROBADA) novedadesAprobadas++;
+    novedadesAprobadas++;
 
     if (desc.includes('ausencia injustificada')) ausenciasInjust.add(fecha);
-    if (desc.includes('ausencia') && n.estado === EstadoNovedad.APROBADA &&
+
+    if (desc.includes('ausencia') &&
         (desc.includes('licencia') || desc.includes('vacaciones') || desc.includes('permiso'))) {
       ausenciasJust.add(fecha);
-      ausenciasInjust.delete(fecha); // justificada prevalece
+      ausenciasInjust.delete(fecha); // justificada prevalece sobre injustificada
     }
 
     if (desc.includes('tardanza')) {
-      const obs = n.observacion ?? '';
-      const match = obs.match(/(\d+) min/);
+      const match = (n.observacion ?? '').match(/(\d+) min/);
       const minutos = match ? Number(match[1]) : 0;
       tardanzasMin += minutos;
       tardanzasDetalle.push({ fecha, minutos });
     }
 
     if (desc.includes('extra al 50%')) {
-      const obs = n.observacion ?? '';
-      const match = obs.match(/(\d+) min/);
+      const match = (n.observacion ?? '').match(/(\d+) min/);
       heMin50 += match ? Number(match[1]) : 0;
     }
 
     if (desc.includes('extra al 100%')) {
-      const obs = n.observacion ?? '';
-      const match = obs.match(/(\d+) min/);
+      const match = (n.observacion ?? '').match(/(\d+) min/);
       heMin100 += match ? Number(match[1]) : 0;
     }
 

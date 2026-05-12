@@ -337,7 +337,7 @@ export function Justificativos() {
       <Group justify="space-between" align="flex-end">
         <Box>
           <Title order={2} fw={900} c="dark" style={{ letterSpacing: '-0.02em' }}>
-            {isAdmin ? 'Novedades y Justificativos' : 'Mis Justificativos'}
+            Justificativos
           </Title>
           <Text size="sm" c="dimmed" mt={4}>
             {isAdmin
