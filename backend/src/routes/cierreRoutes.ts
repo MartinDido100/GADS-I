@@ -13,8 +13,8 @@ router.get('/:periodo', requireAuth, requireRole('ADMINISTRADOR', 'CONTADOR'), c
 // Exportar CSV — ADMIN + CONTADOR
 router.get('/:periodo/export', requireAuth, requireRole('ADMINISTRADOR', 'CONTADOR'), ctrl.exportCsv);
 
-// Cerrar período — solo ADMIN
-router.post('/:periodo/cerrar', requireAuth, requireRole('ADMINISTRADOR'), ctrl.cerrar);
+// Cerrar período — ADMIN + CONTADOR
+router.post('/:periodo/cerrar', requireAuth, requireRole('ADMINISTRADOR', 'CONTADOR'), ctrl.cerrar);
 
 // Reabrir período — solo ADMIN
 router.post('/:periodo/reabrir', requireAuth, requireRole('ADMINISTRADOR'), ctrl.reabrir);

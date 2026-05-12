@@ -12,6 +12,7 @@ export interface EmpleadoInput {
   categoria_laboral: string;
   rol: Rol;
   activo?: boolean;
+  password?: string;
 }
 
 export type EmpleadoUpdateInput = Partial<Omit<EmpleadoInput, 'legajo'>>;
@@ -36,6 +37,7 @@ export async function createEmpleado(input: EmpleadoInput) {
   if (await repo.existsByCuil(input.cuil)) {
     throw new HttpError(409, 'CUIL_EXISTS', `Ya existe un empleado con CUIL ${input.cuil}`);
   }
+  const password_hash = input.password ? await bcrypt.hash(input.password, 10) : undefined;
   return repo.create({
     legajo: input.legajo,
     nombre: input.nombre,
@@ -45,6 +47,7 @@ export async function createEmpleado(input: EmpleadoInput) {
     categoria_laboral: input.categoria_laboral,
     rol: input.rol,
     activo: input.activo ?? true,
+    ...(password_hash && { password_hash }),
   });
 }
 

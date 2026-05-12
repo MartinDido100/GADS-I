@@ -61,11 +61,30 @@ interface AlmuerzoBtnProps {
 // isAdmin=true → usa createFichada (ADMIN, legajo explícito)
 // isAdmin=false → usa fichadaAlmuerzo (cualquier auth, usa legajo del token)
 function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoBtnProps & { isAdmin?: boolean }) {
-  const [loadingSE, setLoadingSE] = useState(false);
-  const [loadingRS, setLoadingRS] = useState(false);
+  // null = cargando, 'fuera' = está almorzando (última MANUAL del día fue S), 'dentro' = no salió o ya volvió
+  const [estado, setEstado] = useState<'dentro' | 'fuera' | null>(null);
+  const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  async function registrar(tipo: 'S' | 'E', label: string, setLoading: (v: boolean) => void) {
+  // Determina el estado actual consultando las fichadas MANUAL del día
+  async function refreshEstado() {
+    try {
+      const hoy = todayIso();
+      const fichadas = await listFichadas({ legajo, desde: hoy, hasta: hoy });
+      // Busca la última fichada MANUAL activa del día (las de almuerzo son MANUAL)
+      const manuales = fichadas
+        .filter((f) => f.activo && f.origen === 'MANUAL')
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const ultima = manuales[0];
+      setEstado(!ultima || ultima.entrada_salida === 'E' ? 'dentro' : 'fuera');
+    } catch {
+      setEstado('dentro'); // fallback: mostrar "salir"
+    }
+  }
+
+  useEffect(() => { void refreshEstado(); }, [legajo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function registrar(tipo: 'S' | 'E', label: string) {
     setLoading(true);
     setMsg(null);
     try {
@@ -79,6 +98,7 @@ function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoB
       } else {
         await fichadaAlmuerzo(tipo);
       }
+      setEstado(tipo === 'S' ? 'fuera' : 'dentro');
       setMsg({ text: `${label} registrada`, ok: true });
       onFichado();
       setTimeout(() => setMsg(null), 3000);
@@ -101,26 +121,29 @@ function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoB
             <Text size="xs" c="dimmed">{nombre}</Text>
           </Stack>
         </Group>
-        <Group gap="xs">
+        {estado === null ? (
+          <Loader size="xs" color="yellow" />
+        ) : estado === 'dentro' ? (
           <Button
             size="xs"
             color="yellow"
             variant="filled"
-            loading={loadingSE}
-            onClick={() => void registrar('S', 'Salida almuerzo', setLoadingSE)}
+            loading={loading}
+            onClick={() => void registrar('S', 'Salida almuerzo')}
           >
             Salir a almorzar
           </Button>
+        ) : (
           <Button
             size="xs"
             color="teal"
             variant="filled"
-            loading={loadingRS}
-            onClick={() => void registrar('E', 'Regreso almuerzo', setLoadingRS)}
+            loading={loading}
+            onClick={() => void registrar('E', 'Regreso almuerzo')}
           >
             Regresar de almuerzo
           </Button>
-        </Group>
+        )}
       </Group>
       {msg && (
         <Text size="xs" mt={6} c={msg.ok ? 'teal' : 'red'} fw={500}>

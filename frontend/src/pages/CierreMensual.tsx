@@ -170,12 +170,19 @@ export function CierreMensual() {
 
   const totales = resumen?.totales;
 
-  // Períodos disponibles para el Select — incluimos siempre el actual
   const periodoOptions = (() => {
-    const set = new Set(periodos.map((p) => p.periodo));
-    set.add(currentPeriodo());
-    return [...set]
-      .sort((a, b) => b.localeCompare(a))
+    const year = new Date().getFullYear();
+    const thisYear = new Set<string>();
+    for (let m = 1; m <= 12; m++) {
+      thisYear.add(`${year}-${String(m).padStart(2, '0')}`);
+    }
+    // Períodos de otros años que ya existen en DB (al final, ordenados)
+    const otherYears = periodos
+      .map((p) => p.periodo)
+      .filter((p) => !thisYear.has(p));
+    const otherSorted = [...new Set(otherYears)].sort((a, b) => a.localeCompare(b));
+    return [...thisYear].sort((a, b) => a.localeCompare(b))
+      .concat(otherSorted)
       .map((p) => ({ value: p, label: getMonthLabel(p) }));
   })();
 
@@ -222,6 +229,11 @@ export function CierreMensual() {
                 Reabrir
               </Button>
             )
+          )}
+          {!isAdmin && resumen && resumen.estado === 'B' && (
+            <Button size="sm" color="red" leftSection={<Lock size={14} />} loading={actionLoading} onClick={handleCerrar}>
+              Confirmar cierre
+            </Button>
           )}
         </Group>
       </Group>

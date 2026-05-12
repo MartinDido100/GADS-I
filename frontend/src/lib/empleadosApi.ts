@@ -9,6 +9,7 @@ export interface EmpleadoCreateInput {
   fecha_ingreso: string; // "YYYY-MM-DD"
   categoria_laboral: string;
   rol: Rol;
+  password?: string;
 }
 
 export type EmpleadoUpdateInput = Partial<Omit<EmpleadoCreateInput, 'legajo'>>;

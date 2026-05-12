@@ -15,6 +15,7 @@ const createSchema = z.object({
   categoria_laboral: z.string().min(1).max(5),
   rol: z.nativeEnum(Rol),
   activo: z.boolean().optional(),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
 });
 
 const updateSchema = z.object({

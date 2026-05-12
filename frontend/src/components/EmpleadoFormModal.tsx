@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
-  Modal, TextInput, Stack, Group, Button, Select, NumberInput, Alert, Text,
+  Modal, TextInput, Stack, Group, Button, Select, NumberInput, Alert, Text, PasswordInput,
 } from '@mantine/core';
 import { AlertCircle } from 'lucide-react';
 import type { Empleado, Rol } from '../types';
@@ -25,6 +25,7 @@ interface FormState {
   fecha_ingreso: string;
   categoria_laboral: string;
   rol: Rol;
+  password: string;
 }
 
 const emptyForm: FormState = {
@@ -35,6 +36,7 @@ const emptyForm: FormState = {
   fecha_ingreso: '',
   categoria_laboral: 'A',
   rol: 'EMPLEADO',
+  password: '',
 };
 
 function toForm(e: Empleado): FormState {
@@ -46,6 +48,7 @@ function toForm(e: Empleado): FormState {
     fecha_ingreso: e.fecha_ingreso.slice(0, 10),
     categoria_laboral: e.categoria_laboral,
     rol: e.rol,
+    password: '',
   };
 }
 
@@ -87,6 +90,7 @@ export function EmpleadoFormModal({ opened, onClose, onSaved, empleado }: Props)
           fecha_ingreso: form.fecha_ingreso,
           categoria_laboral: form.categoria_laboral,
           rol: form.rol,
+          ...(form.password && { password: form.password }),
         };
         saved = await createEmpleado(create);
       }
@@ -189,6 +193,17 @@ export function EmpleadoFormModal({ opened, onClose, onSaved, empleado }: Props)
               allowDeselect={false}
             />
           </Group>
+
+          {!isEdit && (
+            <PasswordInput
+              label="Contraseña inicial"
+              description="Opcional — el empleado puede cambiarla después desde su perfil"
+              placeholder="Mínimo 6 caracteres"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.currentTarget.value })}
+              minLength={form.password ? 6 : undefined}
+            />
+          )}
 
           {error && (
             <Alert icon={<AlertCircle size={16} />} color="red" radius="md" variant="light">
