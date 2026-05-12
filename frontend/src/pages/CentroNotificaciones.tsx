@@ -210,7 +210,7 @@ export function CentroNotificaciones() {
       const filter: { desde?: string; hasta?: string } = {};
       if (rango === 'hoy') {
         filter.desde = todayIso();
-        filter.hasta = todayIso() + 'T23:59:59';
+        filter.hasta = todayIso();
       } else if (rango === 'semana') {
         const d = new Date();
         d.setDate(d.getDate() - 7);

@@ -12,11 +12,16 @@ export interface ListFilter {
   estado?: EstadoNovedad;
 }
 
+function toUtcDate(dateStr: string, endOfDay = false): Date {
+  const day = dateStr.slice(0, 10);
+  return new Date(`${day}T${endOfDay ? '23:59:59' : '00:00:00'}Z`);
+}
+
 export function listNovedades(filter: ListFilter = {}) {
   return repo.findAll({
     legajo: filter.legajo,
-    desde: filter.desde ? new Date(filter.desde) : undefined,
-    hasta: filter.hasta ? new Date(filter.hasta) : undefined,
+    desde: filter.desde ? toUtcDate(filter.desde) : undefined,
+    hasta: filter.hasta ? toUtcDate(filter.hasta, true) : undefined,
     origen: filter.origen,
     estado: filter.estado,
   });
@@ -42,7 +47,7 @@ export async function crearNovedadManual(input: NovedadManualInput) {
 
   return repo.create({
     id_empleado: input.id_empleado,
-    fecha: new Date(input.fecha),
+    fecha: toUtcDate(input.fecha),
     tipo_novedad: input.tipo_novedad,
     origen: OrigenNovedad.MANUAL,
     estado: EstadoNovedad.PENDIENTE,
@@ -85,8 +90,8 @@ export async function recalcularNovedades(legajo: number, desde: string, hasta: 
   const emp = await empleadoRepo.findByLegajo(legajo);
   if (!emp) throw new HttpError(404, 'NOT_FOUND', 'Empleado no encontrado');
 
-  const desdeDate = new Date(desde);
-  const hastaDate = new Date(hasta);
+  const desdeDate = toUtcDate(desde);
+  const hastaDate = toUtcDate(hasta, true);
   if (isNaN(desdeDate.getTime()) || isNaN(hastaDate.getTime())) {
     throw new HttpError(400, 'INVALID_DATE', 'Fechas inválidas');
   }

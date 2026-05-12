@@ -3,6 +3,10 @@ import bcrypt from 'bcryptjs';
 import * as repo from '../repositories/empleadoRepository.js';
 import { HttpError } from '../middleware/errorHandler.js';
 
+function toUtcDate(dateStr: string): Date {
+  return new Date(`${dateStr.slice(0, 10)}T00:00:00Z`);
+}
+
 export interface EmpleadoInput {
   legajo: number;
   nombre: string;
@@ -43,7 +47,7 @@ export async function createEmpleado(input: EmpleadoInput) {
     nombre: input.nombre,
     dni: input.dni,
     cuil: input.cuil,
-    fecha_ingreso: new Date(input.fecha_ingreso),
+    fecha_ingreso: toUtcDate(input.fecha_ingreso),
     categoria_laboral: input.categoria_laboral,
     rol: input.rol,
     activo: input.activo ?? true,
@@ -70,7 +74,7 @@ export async function updateEmpleado(legajo: number, input: EmpleadoUpdateInput)
     ...(input.nombre !== undefined && { nombre: input.nombre }),
     ...(input.dni !== undefined && { dni: input.dni }),
     ...(input.cuil !== undefined && { cuil: input.cuil }),
-    ...(input.fecha_ingreso !== undefined && { fecha_ingreso: new Date(input.fecha_ingreso) }),
+    ...(input.fecha_ingreso !== undefined && { fecha_ingreso: toUtcDate(input.fecha_ingreso) }),
     ...(input.categoria_laboral !== undefined && { categoria_laboral: input.categoria_laboral }),
     ...(input.rol !== undefined && { rol: input.rol }),
     ...(input.activo !== undefined && { activo: input.activo }),

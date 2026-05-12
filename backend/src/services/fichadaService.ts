@@ -19,11 +19,17 @@ export interface ListFilter {
   hasta?: string;
 }
 
+function toUtcDate(dateStr: string, endOfDay = false): Date {
+  // Normalize to YYYY-MM-DD and interpret as UTC midnight (or end of day)
+  const day = dateStr.slice(0, 10);
+  return new Date(`${day}T${endOfDay ? '23:59:59' : '00:00:00'}Z`);
+}
+
 export function listFichadas(filter: ListFilter = {}) {
   return repo.findAll({
     legajo: filter.legajo,
-    desde: filter.desde ? new Date(filter.desde) : undefined,
-    hasta: filter.hasta ? new Date(filter.hasta) : undefined,
+    desde: filter.desde ? toUtcDate(filter.desde) : undefined,
+    hasta: filter.hasta ? toUtcDate(filter.hasta, true) : undefined,
   });
 }
 
