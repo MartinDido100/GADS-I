@@ -47,9 +47,7 @@ const ESTADO_LABEL: Record<EstadoNovedad, string> = {
 const TIPOS_CON_ADJUNTO = [
   'tardanza',
   'ausencia',
-  'licencia por enfermedad',
-  'licencia por examen',
-  'permiso especial',
+  'cambio de horario',
 ];
 
 function requiereAdjunto(descripcion: string) {
@@ -239,7 +237,7 @@ function RecalcularModal({ opened, onClose, onDone, empleados }: RecalcularModal
           />
           <Group grow>
             <TextInput label="Desde" type="date" value={desde} onChange={(e) => setDesde(e.currentTarget.value)} required />
-            <TextInput label="Hasta" type="date" value={hasta} onChange={(e) => setHasta(e.currentTarget.value)} required />
+            <TextInput label="Hasta" type="date" value={hasta} max={todayIso()} onChange={(e) => setHasta(e.currentTarget.value)} required />
           </Group>
           {error && <Alert icon={<AlertCircle size={16} />} color="red" variant="light">{error}</Alert>}
           <Group justify="flex-end" gap="sm">

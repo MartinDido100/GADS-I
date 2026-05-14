@@ -5,11 +5,12 @@ import * as turnoRepo from '../repositories/turnoRepository.js';
 
 // Mapa canónico: descripción del seed → clave interna usada en el motor.
 const TIPO_KEY = {
-  TARDANZA:       'Tardanza',
-  AUSENCIA:       'Ausencia',
-  HE_50:          'Horas extra al 50%',
-  HE_100:         'Horas extra al 100%',
-  SALIDA_ANTICI:  'Salida anticipada',
+  TARDANZA:         'Tardanza',
+  AUSENCIA:         'Ausencia',
+  HE_50:            'Horas extra al 50%',
+  HE_100:           'Horas extra al 100%',
+  SALIDA_ANTICI:    'Salida anticipada',
+  CAMBIO_HORARIO:   'Cambio de horario',
 } as const;
 
 // Cache de IDs de tipo para no ir a la DB en cada llamada.
@@ -165,8 +166,33 @@ export async function calcularNovedades(
       continue;
     }
 
-    // ── Tardanza ─────────────────────────────────────────────────────────
     const minEntradaReal = minutosDelDia(primerEntrada.timestamp);
+    const ultimaSalida = salidas.at(-1);
+    const minSalidaReal = ultimaSalida ? minutosDelDia(ultimaSalida.timestamp) : null;
+
+    // ── Cambio de horario: fichada completamente fuera de la ventana ─────
+    // Caso A: entrada después del retiro esperado (turno corrido por la derecha)
+    // Caso B: salida antes del inicio del horario de entrada (turno corrido por la izquierda)
+    const fueraDeVentana =
+      minEntradaReal >= minutosRetiro ||
+      (minSalidaReal !== null && minSalidaReal <= minutosEntrada);
+
+    if (fueraDeVentana) {
+      const entradaStr = primerEntrada.timestamp.toISOString().slice(11, 16);
+      const salidaStr  = ultimaSalida ? ultimaSalida.timestamp.toISOString().slice(11, 16) : '—';
+      novedadesACrear.push({
+        id_empleado: legajo,
+        fecha: dia,
+        tipo_novedad: tipos[TIPO_KEY.CAMBIO_HORARIO]!,
+        origen: OrigenNovedad.AUTOMATICA,
+        observacion: `Fichada fuera de ventana: ${entradaStr}Z–${salidaStr}Z (horario asignado: ${horario.horario_entrada}–${horario.horario_retiro})`,
+      });
+      detalle.push(`${isoKey}: CAMBIO DE HORARIO (${entradaStr}–${salidaStr})`);
+      continue; // no evaluar tardanza/salida anticipada/HE para este día
+    }
+
+    // ── Tardanza ─────────────────────────────────────────────────────────
+    // Entrada anticipada (antes del horario) no genera novedad
     if (minEntradaReal > minutosEntrada + tolEntrada) {
       const tardanzaMin = minEntradaReal - minutosEntrada;
       novedadesACrear.push({
@@ -180,10 +206,7 @@ export async function calcularNovedades(
     }
 
     // ── Salida anticipada + horas extra ─────────────────────────────────
-    const ultimaSalida = salidas.at(-1);
-    if (ultimaSalida) {
-      const minSalidaReal = minutosDelDia(ultimaSalida.timestamp);
-
+    if (ultimaSalida && minSalidaReal !== null) {
       // Salida anticipada
       if (minSalidaReal < minutosRetiro - tolRetiro) {
         const anticipo = minutosRetiro - minSalidaReal;

@@ -134,7 +134,10 @@ async function calcularResumenEmpleado(
     const desc = n.tipo.descripcion.toLowerCase();
     novedadesAprobadas++;
 
-    if (desc.includes('tardanza')) tardanzasAprobadas.add(fecha);
+    if (desc.includes('tardanza')) {
+      const tieneAdjunto = (n.observacion ?? '').includes('[Adjunto: sí]');
+      if (tieneAdjunto) tardanzasAprobadas.add(fecha);
+    }
 
     if (desc === 'ausencia') {
       const tieneAdjunto = (n.observacion ?? '').includes('[Adjunto: sí]');
