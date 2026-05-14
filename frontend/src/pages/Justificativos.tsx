@@ -43,7 +43,17 @@ const ESTADO_LABEL: Record<EstadoNovedad, string> = {
   RECHAZADA: 'Rechazada',
 };
 
-// Tipos que requieren archivo adjunto (simulado con checkbox)
+// Tipos visibles al crear una novedad manual (alineados con el motor automático)
+const TIPOS_PERMITIDOS = [
+  'tardanza',
+  'ausencia',
+  'horas extra al 50%',
+  'horas extra al 100%',
+  'cambio de horario',
+  'salida anticipada',
+];
+
+// Tipos que muestran el checkbox de adjunto
 const TIPOS_CON_ADJUNTO = [
   'tardanza',
   'ausencia',
@@ -52,6 +62,10 @@ const TIPOS_CON_ADJUNTO = [
 
 function requiereAdjunto(descripcion: string) {
   return TIPOS_CON_ADJUNTO.some((t) => descripcion.toLowerCase().includes(t));
+}
+
+function tipoPermitido(descripcion: string) {
+  return TIPOS_PERMITIDOS.some((t) => descripcion.toLowerCase().includes(t));
 }
 
 // ── Modal para crear justificativo (empleado) o novedad manual (admin) ──────
@@ -136,7 +150,7 @@ function NuevaNovedadModal({ opened, onClose, onSaved, tipos, empleados, miLegaj
           <Select
             label="Tipo de novedad"
             placeholder="Seleccioná un tipo..."
-            data={tipos.map((t) => ({ value: String(t.id_tipo_novedad), label: t.descripcion }))}
+            data={tipos.filter((t) => tipoPermitido(t.descripcion)).map((t) => ({ value: String(t.id_tipo_novedad), label: t.descripcion }))}
             value={tipoId}
             onChange={setTipoId}
             searchable

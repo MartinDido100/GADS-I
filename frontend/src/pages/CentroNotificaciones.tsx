@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Title, Text, Card, Group, Stack, Button, Box, Badge, Loader, Center, Alert,
-  Table, ThemeIcon, SimpleGrid, SegmentedControl, TextInput,
+  Table, ThemeIcon, SegmentedControl, TextInput,
 } from '@mantine/core';
 import {
   Plus, AlertCircle, LogIn, LogOut, Bell, Search, Calendar, UtensilsCrossed,
 } from 'lucide-react';
 import { listFichadas, fichadaAlmuerzo, createFichada, type Fichada } from '../lib/fichadasApi';
-import { listEmpleados } from '../lib/empleadosApi';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { RegistrarFichadaModal } from '../components/RegistrarFichadaModal';
-import type { Empleado } from '../types';
 
 function todayIso() {
   const d = new Date();
@@ -176,41 +174,6 @@ function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoB
   );
 }
 
-// ── Admin: panel para todos los empleados activos ─────────────────────────
-
-function AlmuerzoPanelAdmin({ onFichado }: { onFichado: () => void }) {
-  const [empleados, setEmpleados] = useState<Empleado[]>([]);
-  const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    listEmpleados({ activo: true })
-      .then((all) => setEmpleados(all.sort((a, b) => a.legajo - b.legajo)))
-      .catch(() => {});
-  }, []);
-
-  return (
-    <Stack gap="xs">
-      <Group>
-        <Button
-          size="xs"
-          variant="light"
-          color="yellow"
-          leftSection={<UtensilsCrossed size={14} />}
-          onClick={() => setExpanded((e) => !e)}
-        >
-          {expanded ? 'Ocultar registro de almuerzo' : 'Registrar almuerzo / regreso'}
-        </Button>
-      </Group>
-      {expanded && (
-        <SimpleGrid cols={2} spacing="sm">
-          {empleados.map((e) => (
-            <AlmuerzoPanel key={e.legajo} legajo={e.legajo} nombre={e.nombre} onFichado={onFichado} isAdmin />
-          ))}
-        </SimpleGrid>
-      )}
-    </Stack>
-  );
-}
 
 // ── Página principal ───────────────────────────────────────────────────────
 
@@ -325,13 +288,13 @@ export function CentroNotificaciones() {
         </Card>
       </SimpleGrid>
 
-      {/* Almuerzo: empleado ve el suyo, admin ve panel expandible para todos */}
-      {isAdmin ? (
-        <AlmuerzoPanelAdmin onFichado={() => void load()} />
-      ) : (
-        user && (
-          <AlmuerzoPanel legajo={user.legajo} nombre={user.nombre} onFichado={() => void load()} />
-        )
+      {user && (
+        <AlmuerzoPanel
+          legajo={user.legajo}
+          nombre={user.nombre}
+          onFichado={() => void load()}
+          isAdmin={isAdmin}
+        />
       )}
 
       <Card withBorder shadow="xs" radius="md" padding={0}>

@@ -1,4 +1,5 @@
 import { PrismaClient, Rol } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -59,13 +60,15 @@ const horariosSeed = [
 
 async function main() {
   console.log('Sembrando empleados...');
+  const password_hash = await bcrypt.hash('1234', 10);
   for (const e of empleadosSeed) {
     await prisma.empleado.upsert({
       where: { legajo: e.legajo },
-      update: {},
+      update: { password_hash },
       create: {
         ...e,
         fecha_ingreso: new Date(e.fecha_ingreso),
+        password_hash,
       },
     });
   }
