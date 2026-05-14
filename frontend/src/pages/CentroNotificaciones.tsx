@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Title, Text, Card, Group, Stack, Button, Box, Badge, Loader, Center, Alert,
-  Table, ThemeIcon, SegmentedControl, TextInput,
+  Table, ThemeIcon, SegmentedControl, TextInput, SimpleGrid,
 } from '@mantine/core';
 import {
   Plus, AlertCircle, LogIn, LogOut, Bell, Search, Calendar, UtensilsCrossed,
