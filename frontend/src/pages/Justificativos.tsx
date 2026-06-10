@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   Title, Text, Card, Group, Stack, Button, Box, Badge, Loader, Center, Alert,
   Table, SegmentedControl, TextInput, Modal, Select, Textarea, ActionIcon,
-  Tooltip, SimpleGrid, ThemeIcon, Checkbox,
+  Tooltip, SimpleGrid, ThemeIcon, Checkbox, NumberInput,
 } from '@mantine/core';
 import {
   Plus, AlertCircle, Search, CheckCircle, XCircle, Clock, RefreshCw, Trash2, Paperclip,
@@ -51,6 +51,9 @@ const TIPOS_PERMITIDOS = [
   'horas extra al 100%',
   'cambio de horario',
   'salida anticipada',
+  'salida parcial',
+  'permiso especial',
+  'suspensión',
 ];
 
 // Tipos que muestran el checkbox de adjunto
@@ -58,6 +61,7 @@ const TIPOS_CON_ADJUNTO = [
   'tardanza',
   'ausencia',
   'cambio de horario',
+  'salida parcial',
 ];
 
 function requiereAdjunto(descripcion: string) {
@@ -86,11 +90,16 @@ function NuevaNovedadModal({ opened, onClose, onSaved, tipos, empleados, miLegaj
   const [tipoId, setTipoId] = useState<string | null>(null);
   const [obs, setObs] = useState('');
   const [tieneAdjunto, setTieneAdjunto] = useState(false);
+  const [horasHE, setHorasHE] = useState<number | string>(0);
+  const [minutosHE, setMinutosHE] = useState<number | string>(0);
+  const [minutosPausa, setMinutosPausa] = useState<number | string>(0);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const tipoSeleccionado = tipos.find((t) => String(t.id_tipo_novedad) === tipoId);
   const mostrarAdjunto = tipoSeleccionado ? requiereAdjunto(tipoSeleccionado.descripcion) : false;
+  const esHorasExtra = tipoSeleccionado?.descripcion.toLowerCase().includes('extra') ?? false;
+  const esSalidaParcial = tipoSeleccionado?.descripcion.toLowerCase().includes('salida parcial') ?? false;
 
   useEffect(() => {
     if (!opened) return;
@@ -99,22 +108,44 @@ function NuevaNovedadModal({ opened, onClose, onSaved, tipos, empleados, miLegaj
     setTipoId(null);
     setObs('');
     setTieneAdjunto(false);
+    setHorasHE(0);
+    setMinutosHE(0);
+    setMinutosPausa(0);
     setError(null);
   }, [opened, isAdmin, miLegajo]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!legajo || !tipoId) { setError('Completá todos los campos'); return; }
+
+    // HE manual: la cantidad va en la observación como "<N> min extra"
+    // (el cierre mensual parsea ese formato para sumar los minutos)
+    const totalMinHE = esHorasExtra ? Number(horasHE || 0) * 60 + Number(minutosHE || 0) : 0;
+    if (esHorasExtra && totalMinHE <= 0) {
+      setError('Indicá cuántas horas extra se hicieron');
+      return;
+    }
+
+    // Salida parcial manual: los minutos van en la observación como "<N> min"
+    // (el cierre los parsea para el descuento)
+    if (esSalidaParcial && Number(minutosPausa || 0) <= 0) {
+      setError('Indicá cuántos minutos duró la salida parcial');
+      return;
+    }
+
     setError(null);
     setSubmitting(true);
     try {
       const obsBase = obs.trim();
+      const pct = tipoSeleccionado?.descripcion.match(/(50|100)%/)?.[0] ?? '';
+      const heSuffix = esHorasExtra ? `${obsBase ? ' — ' : ''}${totalMinHE} min extra${pct ? ` (${pct})` : ''}` : '';
+      const pausaSuffix = esSalidaParcial ? `${obsBase ? ' — ' : ''}${Number(minutosPausa)} min` : '';
       const adjuntoSuffix = mostrarAdjunto ? (tieneAdjunto ? ' [Adjunto: sí]' : ' [Adjunto: no]') : '';
       await createNovedad({
         id_empleado: Number(legajo),
         fecha,
         tipo_novedad: Number(tipoId),
-        observacion: (obsBase + adjuntoSuffix).trim() || undefined,
+        observacion: (obsBase + heSuffix + pausaSuffix + adjuntoSuffix).trim() || undefined,
       });
       onSaved();
       onClose();
@@ -156,6 +187,36 @@ function NuevaNovedadModal({ opened, onClose, onSaved, tipos, empleados, miLegaj
             searchable
             required
           />
+          {esHorasExtra && (
+            <Group grow>
+              <NumberInput
+                label="Horas extra"
+                min={0}
+                max={12}
+                value={horasHE}
+                onChange={setHorasHE}
+                required
+              />
+              <NumberInput
+                label="Minutos"
+                min={0}
+                max={59}
+                value={minutosHE}
+                onChange={setMinutosHE}
+              />
+            </Group>
+          )}
+          {esSalidaParcial && (
+            <NumberInput
+              label="Duración de la pausa (minutos)"
+              description="Tiempo que el empleado estuvo fuera"
+              min={1}
+              max={480}
+              value={minutosPausa}
+              onChange={setMinutosPausa}
+              required
+            />
+          )}
           <Textarea
             label="Observación"
             placeholder={isAdmin ? 'Detalle opcional...' : 'Motivo del justificativo...'}
@@ -355,7 +416,6 @@ export function Justificativos() {
   const [search, setSearch] = useState('');
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [recalcOpen, setRecalcOpen] = useState(false);
-  const [recalcDetalle, setRecalcDetalle] = useState<string[] | null>(null);
   const [accionLoading, setAccionLoading] = useState<number | null>(null);
   const [aprobarNov, setAprobarNov] = useState<Novedad | null>(null);
 
@@ -368,7 +428,8 @@ export function Justificativos() {
         listNovedades(filter),
         tipos.length ? Promise.resolve(tipos) : listTiposNovedad(),
       ]);
-      setNovedades(novs);
+      // Las vacaciones tienen su propia pantalla
+      setNovedades(novs.filter((n) => !n.tipo.descripcion.toLowerCase().includes('vacaciones')));
       if (!tipos.length) setTipos(tiposList);
       if (isAdmin && !empleados.length) {
         setEmpleados(await listEmpleados({ activo: true }));
@@ -445,16 +506,6 @@ export function Justificativos() {
         <Alert icon={<AlertCircle size={16} />} color="red" variant="light"
           withCloseButton onClose={() => setError(null)}>
           {error}
-        </Alert>
-      )}
-
-      {recalcDetalle && (
-        <Alert icon={<CheckCircle size={16} />} color="green" variant="light"
-          withCloseButton onClose={() => setRecalcDetalle(null)}
-          title="Recálculo completado">
-          {recalcDetalle.length === 0
-            ? 'No se detectaron novedades en el período.'
-            : recalcDetalle.map((d, i) => <Text key={i} size="xs">{d}</Text>)}
         </Alert>
       )}
 
@@ -559,9 +610,17 @@ export function Justificativos() {
                     </Badge>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="xs" c="dimmed" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {(n.observacion ?? '').replace(/ \[Adjunto: (sí|no)\]/, '') || '—'}
-                    </Text>
+                    {(() => {
+                      const obs = (n.observacion ?? '').replace(/ \[Adjunto: (sí|no)\]/, '');
+                      if (!obs) return <Text size="xs" c="dimmed">—</Text>;
+                      return (
+                        <Tooltip label={obs} withArrow multiline maw={360} events={{ hover: true, focus: true, touch: true }}>
+                          <Text size="xs" c="dimmed" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {obs}
+                          </Text>
+                        </Tooltip>
+                      );
+                    })()}
                   </Table.Td>
                   <Table.Td>
                     {requiereAdjunto(n.tipo.descripcion) ? (
@@ -644,7 +703,7 @@ export function Justificativos() {
         <RecalcularModal
           opened={recalcOpen}
           onClose={() => setRecalcOpen(false)}
-          onDone={(detalle) => { setRecalcDetalle(detalle); void load(); }}
+          onDone={() => void load()}
           empleados={empleados}
         />
       )}

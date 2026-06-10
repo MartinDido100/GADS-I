@@ -5,6 +5,7 @@ import { EmpleadosConfig } from './pages/EmpleadosConfig';
 import { HorariosConfig } from './pages/HorariosConfig';
 import { CierreMensual } from './pages/CierreMensual';
 import { Justificativos } from './pages/Justificativos';
+import { Vacaciones } from './pages/Vacaciones';
 import { Perfil } from './pages/Perfil';
 import { Login } from './pages/Login';
 import { RequireAuth } from './auth/RequireAuth';
@@ -25,6 +26,7 @@ function App() {
           <Route index element={<Navigate to="/app/notificaciones" replace />} />
           <Route path="notificaciones" element={<CentroNotificaciones />} />
           <Route path="justificativos" element={<Justificativos />} />
+          <Route path="vacaciones" element={<Vacaciones />} />
           <Route path="perfil" element={<Perfil />} />
           <Route
             path="empleados"

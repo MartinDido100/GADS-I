@@ -52,7 +52,8 @@ function StatCard({ label, value, unit, color }: { label: string; value: number;
 function DetailPanel({ r }: { r: ResumenEmpleado }) {
   const hasTardanzas = r.tardanzas.length > 0;
   const hasAusencias = r.ausencias_injustificadas > 0 || r.ausencias_justificadas > 0;
-  if (!hasTardanzas && !hasAusencias) return null;
+  const hasDescuento = r.minutos_descontados > 0;
+  if (!hasTardanzas && !hasAusencias && !hasDescuento) return null;
   return (
     <Box py={10} px={4} style={{ borderTop: '1px dashed #e2e8f0' }}>
       {hasTardanzas && (
@@ -86,7 +87,7 @@ function DetailPanel({ r }: { r: ResumenEmpleado }) {
         </Group>
       )}
       {hasAusencias && (
-        <Group gap="xs" align="flex-start">
+        <Group gap="xs" mb={hasDescuento ? 8 : 0} align="flex-start">
           <Text size="xs" fw={700} c="red.7" style={{ minWidth: 90, paddingTop: 2 }}>Ausencias</Text>
           <Group gap={6} wrap="wrap">
             {r.ausencias_injustificadas > 0 && (
@@ -96,6 +97,16 @@ function DetailPanel({ r }: { r: ResumenEmpleado }) {
               <Badge variant="light" color="green" size="sm">{r.ausencias_justificadas} justificadas</Badge>
             )}
           </Group>
+        </Group>
+      )}
+      {hasDescuento && (
+        <Group gap="xs" align="flex-start">
+          <Text size="xs" fw={700} c="yellow.8" style={{ minWidth: 90, paddingTop: 2 }}>Descuentos</Text>
+          <Badge variant="light" color="yellow" size="sm">
+            {r.minutos_descontados >= 60
+              ? `${Math.floor(r.minutos_descontados / 60)}h ${r.minutos_descontados % 60}min`
+              : `${r.minutos_descontados} min`} por salidas parciales sin justificar
+          </Badge>
         </Group>
       )}
     </Box>
@@ -290,7 +301,7 @@ export function CierreMensual() {
             <Table striped highlightOnHover withColumnBorders={false} verticalSpacing="sm">
               <Table.Thead style={{ background: '#f8fafc' }}>
                 <Table.Tr>
-                  {['Empleado', 'Días trab.', 'Llegadas tarde', 'Ausencias', 'HS extra 50%', 'HS extra 100%'].map((h) => (
+                  {['Empleado', 'Días trab.', 'Llegadas tarde', 'Ausencias', 'HS extra 50%', 'HS extra 100%', 'Vacaciones'].map((h) => (
                     <Table.Th key={h} style={{ color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       {h}
                     </Table.Th>
@@ -343,6 +354,11 @@ export function CierreMensual() {
                       <Table.Td style={{ verticalAlign: 'top', paddingTop: 12 }}>
                         {emp.horas_extra_100 > 0
                           ? <Badge variant="light" color="grape">{Math.round(emp.horas_extra_100 / 60 * 10) / 10}h</Badge>
+                          : <Text size="sm" c="gray.4">—</Text>}
+                      </Table.Td>
+                      <Table.Td style={{ verticalAlign: 'top', paddingTop: 12 }}>
+                        {emp.dias_vacaciones > 0
+                          ? <Badge variant="light" color="teal" size="sm">{emp.dias_vacaciones}</Badge>
                           : <Text size="sm" c="gray.4">—</Text>}
                       </Table.Td>
                     </Table.Tr>

@@ -11,12 +11,15 @@ export interface ResumenEmpleado {
   nombre: string;
   categoria_laboral: string;
   dias_trabajados: number;
+  dias_vacaciones: number;
   tardanzas: TardanzaDetalle[];
   ausencias_injustificadas: number;
   ausencias_justificadas: number;
   horas_extra_50: number;
   horas_extra_100: number;
   salidas_anticipadas: number;
+  minutos_descontados: number;
+  minutos_pausas_justificadas: number;
   novedades_aprobadas: number;
 }
 

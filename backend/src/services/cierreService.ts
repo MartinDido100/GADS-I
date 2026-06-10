@@ -1,5 +1,6 @@
 import { EstadoCierre, EstadoNovedad } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { TZ_OFFSET_MIN, minutosLocales, isoDateLocal } from '../lib/tz.js';
 import * as cierreRepo from '../repositories/cierreRepository.js';
 import * as empleadoRepo from '../repositories/empleadoRepository.js';
 import * as turnoRepo from '../repositories/turnoRepository.js';
@@ -8,10 +9,6 @@ import { HttpError } from '../middleware/errorHandler.js';
 function parseHHmm(s: string): number {
   const [h, m] = s.split(':').map(Number);
   return (h ?? 0) * 60 + (m ?? 0);
-}
-
-function minutosDelDia(d: Date): number {
-  return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 
 // ── Tipos de salida ────────────────────────────────────────────────────────
@@ -27,12 +24,15 @@ export interface ResumenEmpleado {
   nombre: string;
   categoria_laboral: string;
   dias_trabajados: number;
+  dias_vacaciones: number;
   tardanzas: TardanzaDetalle[];
   ausencias_injustificadas: number;
   ausencias_justificadas: number;
   horas_extra_50: number;   // minutos
   horas_extra_100: number;  // minutos
   salidas_anticipadas: number;
+  minutos_descontados: number;          // pausas (salida parcial) aprobadas sin adjunto
+  minutos_pausas_justificadas: number;  // pausas aprobadas con adjunto
   novedades_aprobadas: number;
 }
 
@@ -92,13 +92,15 @@ async function calcularResumenEmpleado(
   desde: Date,
   hasta: Date,
 ): Promise<ResumenEmpleado> {
-  // Fichadas activas del período (excluye almuerzo — no afectan E/S laboral)
+  // Fichadas activas del período (excluye almuerzo — no afectan E/S laboral).
+  // El límite superior se extiende por el offset horario: una fichada a las
+  // 22:00 locales del último día del mes cae en el día siguiente en UTC.
   const fichadas = await prisma.fichada.findMany({
     where: {
       id_empleado: legajo,
       activo: true,
       origen: { not: 'ALMUERZO' },
-      timestamp: { gte: desde, lte: hasta },
+      timestamp: { gte: desde, lte: new Date(hasta.getTime() - TZ_OFFSET_MIN * 60_000) },
     },
     orderBy: { timestamp: 'asc' },
   });
@@ -109,15 +111,37 @@ async function calcularResumenEmpleado(
     include: { tipo: true },
   });
 
-  // Agrupar fichadas por día UTC
+  // Vacaciones aprobadas (sin filtro de fecha: un rango puede empezar antes
+  // del período y cubrir días dentro de él). Días de vacaciones con turno
+  // cuentan como trabajados — son pagos.
+  const vacaciones = await prisma.novedad.findMany({
+    where: {
+      id_empleado: legajo,
+      estado: EstadoNovedad.APROBADA,
+      tipo: { descripcion: { contains: 'Vacaciones', mode: 'insensitive' } },
+    },
+  });
+  const diasDeVacaciones = new Set<string>();
+  for (const v of vacaciones) {
+    const m = (v.observacion ?? '').match(/del (\d{4}-\d{2}-\d{2}) al (\d{4}-\d{2}-\d{2})/);
+    const inicio = m ? new Date(`${m[1]}T00:00:00Z`) : new Date(v.fecha);
+    const fin    = m ? new Date(`${m[2]}T00:00:00Z`) : new Date(v.fecha);
+    for (const d = new Date(inicio); d <= fin; d.setUTCDate(d.getUTCDate() + 1)) {
+      diasDeVacaciones.add(d.toISOString().slice(0, 10));
+    }
+  }
+
+  // Agrupar fichadas por día en hora local
   const fichadasPorDia = new Map<string, typeof fichadas>();
   for (const f of fichadas) {
-    const key = isoDate(f.timestamp);
+    const key = isoDateLocal(f.timestamp);
     if (!fichadasPorDia.has(key)) fichadasPorDia.set(key, []);
     fichadasPorDia.get(key)!.push(f);
   }
 
   const dias = diasEnRango(desde, hasta);
+  // Días calendario de vacaciones dentro del período (incluye fines de semana)
+  const diasVacacionesMes = dias.filter((d) => diasDeVacaciones.has(isoDate(d))).length;
   let diasTrabajados = 0;
   const tardanzasDetalle: TardanzaDetalle[] = [];
   const ausenciasInjust = new Set<string>();
@@ -126,6 +150,8 @@ async function calcularResumenEmpleado(
   let heMin50 = 0;
   let heMin100 = 0;
   let salidasAnticipadas = 0;
+  let minutosDescontados = 0;
+  let minutosPausasJust = 0;
   let novedadesAprobadas = 0;
 
   for (const n of novedades) {
@@ -154,14 +180,24 @@ async function calcularResumenEmpleado(
       ausenciasInjust.delete(fecha);
     }
     if (desc.includes('extra al 50%')) {
-      const match = (n.observacion ?? '').match(/(\d+) min/);
+      const match = (n.observacion ?? '').match(/(\d+) min extra/);
       heMin50 += match ? Number(match[1]) : 0;
     }
     if (desc.includes('extra al 100%')) {
-      const match = (n.observacion ?? '').match(/(\d+) min/);
+      const match = (n.observacion ?? '').match(/(\d+) min extra/);
       heMin100 += match ? Number(match[1]) : 0;
     }
     if (desc.includes('salida anticipada')) salidasAnticipadas++;
+
+    // Salida parcial (pausa S→E): justificada con adjunto no descuenta;
+    // aprobada sin adjunto descuenta los minutos de la pausa.
+    if (desc.includes('salida parcial')) {
+      const tieneAdjunto = (n.observacion ?? '').includes('[Adjunto: sí]');
+      const match = (n.observacion ?? '').match(/(\d+) min/);
+      const minutos = match ? Number(match[1]) : 0;
+      if (tieneAdjunto) minutosPausasJust += minutos;
+      else minutosDescontados += minutos;
+    }
   }
 
   // Iterar día a día usando turnos y horarios reales
@@ -178,6 +214,12 @@ async function calcularResumenEmpleado(
     const tolEntrada         = horario.tolerancia_entrada;
     const tolRetiro          = horario.tolerancia_retiro;
 
+    // Vacaciones aprobadas: día pago → cuenta como trabajado, sin más evaluación
+    if (diasDeVacaciones.has(isoKey)) {
+      diasTrabajados++;
+      continue;
+    }
+
     const fichadasDia = fichadasPorDia.get(isoKey) ?? [];
     const entradas = fichadasDia.filter((f) => f.entrada_salida === 'E');
     const salidas  = fichadasDia.filter((f) => f.entrada_salida === 'S');
@@ -185,21 +227,28 @@ async function calcularResumenEmpleado(
     const primerEntrada = entradas[0];
     const ultimaSalida  = salidas.at(-1);
 
-    // Día trabajado: tiene entrada Y salida dentro del horario (salida >= retiro - tolerancia)
-    if (primerEntrada && ultimaSalida) {
-      const minSalidaReal = minutosDelDia(ultimaSalida.timestamp);
-      if (minSalidaReal >= minRetiroEsperado - tolRetiro) {
-        diasTrabajados++;
-      }
+    // Sin entrada → ausencia. Si está justificada (aprobada con adjunto)
+    // el día cuenta como trabajado; injustificada no.
+    if (!primerEntrada) {
+      if (ausenciasJust.has(isoKey)) diasTrabajados++;
+      continue;
     }
 
     // Tardanza: calculada desde fichadas; justificada si el admin aprobó la novedad
-    if (primerEntrada) {
-      const minEntradaReal = minutosDelDia(primerEntrada.timestamp);
-      if (minEntradaReal > minEntradaEsperada + tolEntrada) {
-        const minutos = minEntradaReal - minEntradaEsperada;
-        tardanzasDetalle.push({ fecha: isoKey, minutos, justificada: tardanzasAprobadas.has(isoKey) });
-      }
+    const minEntradaReal = minutosLocales(primerEntrada.timestamp);
+    const llegoTarde = minEntradaReal > minEntradaEsperada + tolEntrada;
+    if (llegoTarde) {
+      const minutos = minEntradaReal - minEntradaEsperada;
+      tardanzasDetalle.push({ fecha: isoKey, minutos, justificada: tardanzasAprobadas.has(isoKey) });
+    }
+
+    // Día trabajado:
+    // - con tardanza: cuenta sólo si está justificada
+    // - sin tardanza: cuenta si hay salida dentro del horario (salida >= retiro - tolerancia)
+    if (llegoTarde) {
+      if (tardanzasAprobadas.has(isoKey)) diasTrabajados++;
+    } else if (ultimaSalida && minutosLocales(ultimaSalida.timestamp) >= minRetiroEsperado - tolRetiro) {
+      diasTrabajados++;
     }
   }
 
@@ -208,12 +257,15 @@ async function calcularResumenEmpleado(
     nombre,
     categoria_laboral,
     dias_trabajados: diasTrabajados,
+    dias_vacaciones: diasVacacionesMes,
     tardanzas: tardanzasDetalle,
     ausencias_injustificadas: ausenciasInjust.size,
     ausencias_justificadas: ausenciasJust.size,
     horas_extra_50: heMin50,
     horas_extra_100: heMin100,
     salidas_anticipadas: salidasAnticipadas,
+    minutos_descontados: minutosDescontados,
+    minutos_pausas_justificadas: minutosPausasJust,
     novedades_aprobadas: novedadesAprobadas,
   };
 }
@@ -307,10 +359,11 @@ export async function exportarCSV(periodo: string): Promise<string> {
 
   const header = [
     'Legajo', 'Nombre', 'Categoría', 'Días trabajados',
-    'Tardanzas (cant)', 'Tardanzas (min total)',
-    'Ausencias injustificadas', 'Ausencias justificadas',
+    'Tardanzas justificadas', 'Tardanzas injustificadas',
+    'Ausencias justificadas', 'Ausencias injustificadas',
     'HS extra 50% (min)', 'HS extra 100% (min)',
-    'Salidas anticipadas', 'Novedades aprobadas',
+    'Salidas anticipadas', 'Vacaciones',
+    'Salidas parciales (min total)', 'Salidas parciales justificadas (min)', 'Salidas parciales injustificadas (min)',
   ].join(',');
 
   const rows = resumen.empleados.map((e) => [
@@ -318,14 +371,17 @@ export async function exportarCSV(periodo: string): Promise<string> {
     `"${e.nombre}"`,
     e.categoria_laboral,
     e.dias_trabajados,
-    e.tardanzas.length,
-    e.tardanzas.reduce((s, t) => s + t.minutos, 0),
-    e.ausencias_injustificadas,
+    e.tardanzas.filter((t) => t.justificada).length,
+    e.tardanzas.filter((t) => !t.justificada).length,
     e.ausencias_justificadas,
+    e.ausencias_injustificadas,
     e.horas_extra_50,
     e.horas_extra_100,
     e.salidas_anticipadas,
-    e.novedades_aprobadas,
+    e.dias_vacaciones,
+    e.minutos_pausas_justificadas + e.minutos_descontados,
+    e.minutos_pausas_justificadas,
+    e.minutos_descontados,
   ].join(','));
 
   return [header, ...rows].join('\n');

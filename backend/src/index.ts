@@ -8,6 +8,7 @@ import { horarioRoutes, turnoRoutes } from './routes/horarioRoutes.js';
 import { fichadaRoutes } from './routes/fichadaRoutes.js';
 import { novedadRoutes, recalcularNovedadesRouter } from './routes/novedadRoutes.js';
 import { cierreRoutes } from './routes/cierreRoutes.js';
+import { iniciarRecalculoDiario } from './lib/recalculoDiario.js';
 
 const app = express();
 
@@ -31,4 +32,5 @@ app.use(errorHandler);
 
 app.listen(env.port, () => {
   console.log(`DigitalCheck API listening on http://localhost:${env.port}`);
+  iniciarRecalculoDiario();
 });

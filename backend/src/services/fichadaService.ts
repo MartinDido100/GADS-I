@@ -2,6 +2,19 @@ import { EntradaSalida, OrigenFichada } from '@prisma/client';
 import * as repo from '../repositories/fichadaRepository.js';
 import * as empleadoRepo from '../repositories/empleadoRepository.js';
 import { HttpError } from '../middleware/errorHandler.js';
+import { isoDateLocal } from '../lib/tz.js';
+import { calcularNovedades } from './reglasService.js';
+
+// Recalcula las novedades automáticas del día (local) de la fichada.
+// Nunca falla hacia afuera: un error de recálculo no debe romper el fichaje.
+async function recalcularDiaDeFichada(legajo: number, timestamp: Date) {
+  try {
+    const dia = new Date(`${isoDateLocal(timestamp)}T00:00:00Z`);
+    await calcularNovedades(legajo, dia, dia);
+  } catch (err) {
+    console.error(`Recálculo automático falló (legajo ${legajo}):`, err);
+  }
+}
 
 export interface FichadaInput {
   id_empleado: number;
@@ -62,7 +75,7 @@ export async function registrarFichada(input: FichadaInput) {
     }
   }
 
-  return repo.create({
+  const fichada = await repo.create({
     empleado: { connect: { legajo: input.id_empleado } },
     timestamp: new Date(input.timestamp),
     entrada_salida: input.entrada_salida,
@@ -75,6 +88,16 @@ export async function registrarFichada(input: FichadaInput) {
       corrige: { connect: { identidad: input.id_correccion } },
     }),
   });
+
+  // Toda fichada laboral recalcula las novedades del día: la salida evalúa
+  // la jornada y la entrada limpia novedades que una pausa dejó obsoletas.
+  // Las correcciones disparan el recálculo desde corregirFichada (después
+  // de desactivar la original).
+  if (input.origen !== OrigenFichada.ALMUERZO && input.id_correccion === undefined) {
+    await recalcularDiaDeFichada(input.id_empleado, fichada.timestamp);
+  }
+
+  return fichada;
 }
 
 // Permite al propio empleado declarar salida/regreso de almuerzo.
@@ -106,13 +129,17 @@ export async function registrarBiometrico(legajo: number) {
   const ultima = await repo.findUltimaFichadaDelDia(legajo, ahora);
   const tipo: EntradaSalida = (!ultima || ultima.entrada_salida === 'S') ? 'E' : 'S';
 
-  return repo.create({
+  const fichada = await repo.create({
     empleado: { connect: { legajo } },
     timestamp: ahora,
     entrada_salida: tipo,
     origen: OrigenFichada.BIOMETRICO,
     activo: true,
   });
+
+  await recalcularDiaDeFichada(legajo, ahora);
+
+  return fichada;
 }
 
 export async function corregirFichada(
@@ -134,6 +161,12 @@ export async function corregirFichada(
   // 2. Marcar la original como inactiva (la correctiva la reemplaza para
   //    cómputos futuros del motor de reglas).
   await repo.marcarInactiva(identidad);
+
+  // 3. Recalcular el día de la fichada nueva y el de la original (pueden diferir).
+  await recalcularDiaDeFichada(nueva.id_empleado, new Date(nueva.timestamp));
+  if (isoDateLocal(original.timestamp) !== isoDateLocal(new Date(nueva.timestamp))) {
+    await recalcularDiaDeFichada(original.id_empleado, original.timestamp);
+  }
 
   return correccion;
 }

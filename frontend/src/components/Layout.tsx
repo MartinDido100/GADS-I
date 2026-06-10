@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { AppShell, Group, Stack, Text, Box, Avatar, ActionIcon, Tooltip } from '@mantine/core';
-import { Users, FileText, Clock, Bell, LogOut, Calendar, ClipboardList, UserCircle } from 'lucide-react';
+import { Users, FileText, Clock, Bell, LogOut, Calendar, ClipboardList, UserCircle, Plane } from 'lucide-react';
 // Bell se usa para el header notification icon — lo aprovecho también para nav
 import styles from './Layout.module.css';
 import { useAuth } from '../auth/AuthContext';
@@ -10,6 +10,7 @@ import type { Rol } from '../types';
 const allNavItems: { to: string; icon: typeof Users; label: string; roles: Rol[] }[] = [
   { to: '/app/notificaciones',  icon: Bell,          label: 'Notificaciones',  roles: ['EMPLEADO', 'ADMINISTRADOR', 'CONTADOR'] },
   { to: '/app/justificativos', icon: ClipboardList, label: 'Justificativos',  roles: ['EMPLEADO', 'ADMINISTRADOR'] },
+  { to: '/app/vacaciones',     icon: Plane,         label: 'Vacaciones',      roles: ['EMPLEADO', 'ADMINISTRADOR'] },
   { to: '/app/empleados',      icon: Users,         label: 'Empleados',       roles: ['ADMINISTRADOR'] },
   { to: '/app/horarios',       icon: Calendar,      label: 'Horarios',        roles: ['ADMINISTRADOR'] },
   { to: '/app/cierre',         icon: FileText,      label: 'Cierre Mensual',  roles: ['ADMINISTRADOR', 'CONTADOR'] },

@@ -29,9 +29,11 @@ const tiposNovedad = [
   'Salida anticipada',
   'Licencia por enfermedad',
   'Licencia por examen',
-  'Vacaciones parciales',
+  'Vacaciones',
   'Suspensión disciplinaria',
   'Cambio de horario',
+  'Permiso especial',
+  'Salida parcial',
 ];
 
 // Un horario base "comercio 9 a 18" para que haya algo asignable de inicio.
