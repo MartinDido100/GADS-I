@@ -45,6 +45,7 @@ export interface NovedadListFilter {
   hasta?: string;
   origen?: OrigenNovedad;
   estado?: EstadoNovedad;
+  search?: string;
 }
 
 export function listNovedades(filter: NovedadListFilter = {}) {
@@ -54,8 +55,45 @@ export function listNovedades(filter: NovedadListFilter = {}) {
   if (filter.hasta) qs.set('hasta', filter.hasta);
   if (filter.origen) qs.set('origen', filter.origen);
   if (filter.estado) qs.set('estado', filter.estado);
+  if (filter.search) qs.set('search', filter.search);
   const suffix = qs.toString() ? `?${qs}` : '';
   return api<Novedad[]>(`/novedades${suffix}`);
+}
+
+export type SortableField = 'fecha' | 'empleado' | 'tipo' | 'origen' | 'estado';
+export type SortDir = 'asc' | 'desc';
+
+export interface NovedadPageFilter extends NovedadListFilter {
+  page: number;
+  pageSize: number;
+  sortBy: SortableField;
+  sortDir: SortDir;
+  excluir?: string; // excluye tipos por descripción (ej. "vacaciones")
+}
+
+export interface NovedadPage {
+  items: Novedad[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  stats: Record<EstadoNovedad, number>;
+}
+
+export function listNovedadesPaginado(filter: NovedadPageFilter) {
+  const qs = new URLSearchParams();
+  if (filter.legajo !== undefined) qs.set('legajo', String(filter.legajo));
+  if (filter.desde) qs.set('desde', filter.desde);
+  if (filter.hasta) qs.set('hasta', filter.hasta);
+  if (filter.origen) qs.set('origen', filter.origen);
+  if (filter.estado) qs.set('estado', filter.estado);
+  if (filter.search) qs.set('search', filter.search);
+  if (filter.excluir) qs.set('excluir', filter.excluir);
+  qs.set('page', String(filter.page));
+  qs.set('pageSize', String(filter.pageSize));
+  qs.set('sortBy', filter.sortBy);
+  qs.set('sortDir', filter.sortDir);
+  return api<NovedadPage>(`/novedades?${qs}`);
 }
 
 export function listTiposNovedad() {

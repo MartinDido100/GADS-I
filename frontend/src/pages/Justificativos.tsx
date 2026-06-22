@@ -1,29 +1,31 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   Title, Text, Card, Group, Stack, Button, Box, Badge, Loader, Center, Alert,
   Table, SegmentedControl, TextInput, Modal, Select, Textarea, ActionIcon,
-  Tooltip, SimpleGrid, ThemeIcon, Checkbox, NumberInput,
+  Tooltip, SimpleGrid, ThemeIcon, Checkbox, NumberInput, Pagination, UnstyledButton,
 } from '@mantine/core';
 import {
   Plus, AlertCircle, Search, CheckCircle, XCircle, Clock, RefreshCw, Trash2, Paperclip,
+  ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react';
 import {
-  listNovedades, listTiposNovedad, createNovedad, aprobarNovedad,
+  listNovedadesPaginado, listTiposNovedad, createNovedad, aprobarNovedad,
   rechazarNovedad, eliminarNovedad, recalcularNovedades,
   type Novedad, type TipoNovedad, type EstadoNovedad,
+  type SortableField, type SortDir,
 } from '../lib/novedadesApi';
 import { listEmpleados } from '../lib/empleadosApi';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
+import { clientNow, nowIso } from '../lib/clock';
 import type { Empleado } from '../types';
 
 function todayIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return nowIso();
 }
 
 function firstOfMonth() {
-  const d = new Date();
+  const d = clientNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
@@ -401,11 +403,28 @@ function AprobarModal({ novedad, onClose, onAprobada }: AprobarModalProps) {
   );
 }
 
+// ── Cabecera de columna ordenable ────────────────────────────────────────────
+
+function SortHeader({ label, active, dir, onClick }: {
+  label: string; active: boolean; dir: SortDir; onClick: () => void;
+}) {
+  return (
+    <UnstyledButton onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <Text inherit span style={{ color: active ? '#475569' : '#94a3b8' }}>{label}</Text>
+      {active
+        ? (dir === 'asc' ? <ChevronUp size={12} color="#475569" /> : <ChevronDown size={12} color="#475569" />)
+        : <ChevronsUpDown size={12} color="#cbd5e1" />}
+    </UnstyledButton>
+  );
+}
+
 // ── Pantalla principal ───────────────────────────────────────────────────────
 
 export function Justificativos() {
   const { user } = useAuth();
   const isAdmin = user?.rol === 'ADMINISTRADOR';
+
+  const PAGE_SIZE = 15;
 
   const [novedades, setNovedades] = useState<Novedad[]>([]);
   const [tipos, setTipos] = useState<TipoNovedad[]>([]);
@@ -414,6 +433,13 @@ export function Justificativos() {
   const [error, setError] = useState<string | null>(null);
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoNovedad | 'TODOS'>('TODOS');
   const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<Record<EstadoNovedad, number>>({ PENDIENTE: 0, APROBADA: 0, RECHAZADA: 0 });
+  const [sortBy, setSortBy] = useState<SortableField>('fecha');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [recalcOpen, setRecalcOpen] = useState(false);
   const [accionLoading, setAccionLoading] = useState<number | null>(null);
@@ -423,14 +449,20 @@ export function Justificativos() {
     setLoading(true);
     setError(null);
     try {
-      const filter = estadoFiltro !== 'TODOS' ? { estado: estadoFiltro } : {};
-      const [novs, tiposList] = await Promise.all([
-        listNovedades(filter),
-        tipos.length ? Promise.resolve(tipos) : listTiposNovedad(),
-      ]);
-      // Las vacaciones tienen su propia pantalla
-      setNovedades(novs.filter((n) => !n.tipo.descripcion.toLowerCase().includes('vacaciones')));
-      if (!tipos.length) setTipos(tiposList);
+      const page = await listNovedadesPaginado({
+        ...(estadoFiltro !== 'TODOS' ? { estado: estadoFiltro } : {}),
+        ...(searchDebounced ? { search: searchDebounced } : {}),
+        excluir: 'vacaciones', // las vacaciones tienen su propia pantalla
+        page: pageRef.current,
+        pageSize: PAGE_SIZE,
+        sortBy,
+        sortDir,
+      });
+      setNovedades(page.items);
+      setTotal(page.total);
+      setTotalPages(page.totalPages);
+      setStats(page.stats);
+      if (!tipos.length) setTipos(await listTiposNovedad());
       if (isAdmin && !empleados.length) {
         setEmpleados(await listEmpleados({ activo: true }));
       }
@@ -441,23 +473,40 @@ export function Justificativos() {
     }
   }
 
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [estadoFiltro]);
+  // pageRef evita que `load` dependa de `page` directamente (lo lee en el momento).
+  const pageRef = useRef(page);
+  pageRef.current = page;
 
-  const filtered = useMemo(() => {
-    if (!search) return novedades;
-    const s = search.toLowerCase();
-    return novedades.filter((n) =>
-      n.empleado.nombre.toLowerCase().includes(s) ||
-      String(n.empleado.legajo).includes(s) ||
-      n.tipo.descripcion.toLowerCase().includes(s)
-    );
-  }, [novedades, search]);
+  // Debounce del search: actualiza searchDebounced 350ms después de tipear.
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const stats = useMemo(() => ({
-    pendientes: novedades.filter((n) => n.estado === 'PENDIENTE').length,
-    aprobadas:  novedades.filter((n) => n.estado === 'APROBADA').length,
-    rechazadas: novedades.filter((n) => n.estado === 'RECHAZADA').length,
-  }), [novedades]);
+  // Cambiar filtro/búsqueda/orden vuelve a la página 1.
+  useEffect(() => { setPage(1); }, [estadoFiltro, searchDebounced, sortBy, sortDir]);
+
+  // Recargar al cambiar cualquier parámetro de la consulta.
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ },
+    [estadoFiltro, searchDebounced, sortBy, sortDir, page]);
+
+  // Recargar cuando el reloj de demo cruza días: aparecen ausencias nuevas.
+  useEffect(() => {
+    const onClock = () => void load();
+    window.addEventListener('demo-clock-changed', onClock);
+    return () => window.removeEventListener('demo-clock-changed', onClock);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estadoFiltro, searchDebounced, sortBy, sortDir, page]);
+
+  // Click en una columna ordenable: alterna asc/desc o cambia de campo.
+  function toggleSort(field: SortableField) {
+    if (sortBy === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(field);
+      setSortDir('asc');
+    }
+  }
 
   function handleAbrirAprobar(nov: Novedad) {
     setAprobarNov(nov);
@@ -514,7 +563,7 @@ export function Justificativos() {
           <Group gap="md">
             <ThemeIcon size={48} radius="md" color="yellow" variant="light"><Clock size={22} /></ThemeIcon>
             <Stack gap={2}>
-              <Text size="28px" fw={900} lh={1} c="dark">{stats.pendientes}</Text>
+              <Text size="28px" fw={900} lh={1} c="dark">{stats.PENDIENTE}</Text>
               <Text size="sm" c="dimmed">Pendientes</Text>
             </Stack>
           </Group>
@@ -523,7 +572,7 @@ export function Justificativos() {
           <Group gap="md">
             <ThemeIcon size={48} radius="md" color="green" variant="light"><CheckCircle size={22} /></ThemeIcon>
             <Stack gap={2}>
-              <Text size="28px" fw={900} lh={1} c="dark">{stats.aprobadas}</Text>
+              <Text size="28px" fw={900} lh={1} c="dark">{stats.APROBADA}</Text>
               <Text size="sm" c="dimmed">Aprobadas</Text>
             </Stack>
           </Group>
@@ -532,7 +581,7 @@ export function Justificativos() {
           <Group gap="md">
             <ThemeIcon size={48} radius="md" color="red" variant="light"><XCircle size={22} /></ThemeIcon>
             <Stack gap={2}>
-              <Text size="28px" fw={900} lh={1} c="dark">{stats.rechazadas}</Text>
+              <Text size="28px" fw={900} lh={1} c="dark">{stats.RECHAZADA}</Text>
               <Text size="sm" c="dimmed">Rechazadas</Text>
             </Stack>
           </Group>
@@ -572,18 +621,42 @@ export function Justificativos() {
             <Table.Thead style={{ background: '#f8fafc' }}>
               <Table.Tr>
                 {(isAdmin
-                  ? ['Empleado', 'Fecha', 'Tipo', 'Origen', 'Estado', 'Observación', 'Adjunto', '']
-                  : ['Fecha', 'Tipo', 'Origen', 'Estado', 'Observación', 'Adjunto', '']
-                ).map((h) => (
-                  <Table.Th key={h}
+                  ? [
+                      { label: 'Empleado', field: 'empleado' as const },
+                      { label: 'Fecha', field: 'fecha' as const },
+                      { label: 'Tipo', field: 'tipo' as const },
+                      { label: 'Origen', field: 'origen' as const },
+                      { label: 'Estado', field: 'estado' as const },
+                      { label: 'Observación', field: null },
+                      { label: 'Adjunto', field: null },
+                      { label: '', field: null },
+                    ]
+                  : [
+                      { label: 'Fecha', field: 'fecha' as const },
+                      { label: 'Tipo', field: 'tipo' as const },
+                      { label: 'Origen', field: 'origen' as const },
+                      { label: 'Estado', field: 'estado' as const },
+                      { label: 'Observación', field: null },
+                      { label: 'Adjunto', field: null },
+                      { label: '', field: null },
+                    ]
+                ).map((col, i) => (
+                  <Table.Th key={col.label || `c${i}`}
                     style={{ color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    {h}
+                    {col.field ? (
+                      <SortHeader
+                        label={col.label}
+                        active={sortBy === col.field}
+                        dir={sortDir}
+                        onClick={() => toggleSort(col.field)}
+                      />
+                    ) : col.label}
                   </Table.Th>
                 ))}
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {filtered.map((n) => (
+              {novedades.map((n) => (
                 <Table.Tr key={n.id_novedad}>
                   {isAdmin && (
                     <Table.Td>
@@ -675,17 +748,36 @@ export function Justificativos() {
                 </Table.Tr>
               ))}
 
-              {filtered.length === 0 && (
+              {novedades.length === 0 && (
                 <Table.Tr>
                   <Table.Td colSpan={isAdmin ? 8 : 7}>
                     <Text ta="center" size="sm" c="dimmed" py="xl">
-                      No hay novedades en este período.
+                      {searchDebounced ? 'No hay resultados para la búsqueda.' : 'No hay novedades en este período.'}
                     </Text>
                   </Table.Td>
                 </Table.Tr>
               )}
             </Table.Tbody>
           </Table>
+        )}
+
+        {/* Paginación + contador */}
+        {!loading && total > 0 && (
+          <Group justify="space-between" px="md" py="sm" style={{ borderTop: '1px solid #f1f5f9' }}>
+            <Text size="xs" c="dimmed">
+              Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} de {total}
+            </Text>
+            {totalPages > 1 && (
+              <Pagination
+                value={page}
+                onChange={setPage}
+                total={totalPages}
+                size="sm"
+                color="red"
+                withEdges
+              />
+            )}
+          </Group>
         )}
       </Card>
 

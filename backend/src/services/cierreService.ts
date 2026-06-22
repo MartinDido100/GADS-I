@@ -1,6 +1,7 @@
 import { EstadoCierre, EstadoNovedad } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { TZ_OFFSET_MIN, minutosLocales, isoDateLocal } from '../lib/tz.js';
+import { now } from '../lib/clock.js';
 import * as cierreRepo from '../repositories/cierreRepository.js';
 import * as empleadoRepo from '../repositories/empleadoRepository.js';
 import * as turnoRepo from '../repositories/turnoRepository.js';
@@ -325,7 +326,7 @@ export async function cerrarPeriodo(periodo: string): Promise<ResumenPeriodo> {
 
   await cierreRepo.upsertGlobal(periodoDate, {
     estado: EstadoCierre.C,
-    fecha_cierre: new Date(),
+    fecha_cierre: now(),
   });
 
   return getResumenPeriodo(periodo);

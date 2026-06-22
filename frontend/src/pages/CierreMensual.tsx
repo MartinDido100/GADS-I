@@ -10,9 +10,10 @@ import {
 } from '../lib/cierreApi';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
+import { clientNow } from '../lib/clock';
 
 function currentPeriodo(): string {
-  const d = new Date();
+  const d = clientNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
@@ -194,7 +195,7 @@ export function CierreMensual() {
   const totales = resumen?.totales;
 
   const periodoOptions = (() => {
-    const year = new Date().getFullYear();
+    const year = clientNow().getFullYear();
     const thisYear = new Set<string>();
     for (let m = 1; m <= 12; m++) {
       thisYear.add(`${year}-${String(m).padStart(2, '0')}`);

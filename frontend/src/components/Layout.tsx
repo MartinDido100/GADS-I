@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { AppShell, Group, Stack, Text, Box, Avatar, ActionIcon, Tooltip } from '@mantine/core';
 import { Users, FileText, Clock, Bell, LogOut, Calendar, ClipboardList, UserCircle, Plane } from 'lucide-react';
@@ -5,6 +6,9 @@ import { Users, FileText, Clock, Bell, LogOut, Calendar, ClipboardList, UserCirc
 import styles from './Layout.module.css';
 import { useAuth } from '../auth/AuthContext';
 import { SimuladorFichaje } from './SimuladorFichaje';
+import { RelojSidebar } from './RelojSidebar';
+import { getClock } from '../lib/demoApi';
+import { syncClock } from '../lib/clock';
 import type { Rol } from '../types';
 
 const allNavItems: { to: string; icon: typeof Users; label: string; roles: Rol[] }[] = [
@@ -14,6 +18,7 @@ const allNavItems: { to: string; icon: typeof Users; label: string; roles: Rol[]
   { to: '/app/empleados',      icon: Users,         label: 'Empleados',       roles: ['ADMINISTRADOR'] },
   { to: '/app/horarios',       icon: Calendar,      label: 'Horarios',        roles: ['ADMINISTRADOR'] },
   { to: '/app/cierre',         icon: FileText,      label: 'Cierre Mensual',  roles: ['ADMINISTRADOR', 'CONTADOR'] },
+  { to: '/app/reloj-demo',     icon: Clock,         label: 'Reloj de demo',   roles: ['ADMINISTRADOR'] },
   { to: '/app/perfil',         icon: UserCircle,    label: 'Mi Perfil',       roles: ['EMPLEADO', 'ADMINISTRADOR', 'CONTADOR'] },
 ];
 
@@ -30,6 +35,19 @@ function getInitials(nombre: string) {
 export function Layout() {
   const { user, logout } = useAuth();
   const navItems = allNavItems.filter((item) => user && item.roles.includes(user.rol));
+
+  // Sincronizar el reloj de cliente con el de demo del servidor al entrar.
+  // Así "hoy" sigue al tiempo simulado en todas las pantallas, aunque no se
+  // haya visitado la tab del reloj. Solo admin tiene acceso al endpoint.
+  useEffect(() => {
+    if (user?.rol !== 'ADMINISTRADOR') return;
+    getClock()
+      .then((r) => {
+        syncClock(r.now);
+        if (r.isSimulated) window.dispatchEvent(new CustomEvent('demo-clock-changed', { detail: r }));
+      })
+      .catch(() => {});
+  }, [user]);
 
   return (
     <AppShell
@@ -83,6 +101,9 @@ export function Layout() {
             </NavLink>
           ))}
         </Box>
+
+        {/* Reloj del sistema (solo admin: maneja el reloj de demo) */}
+        {user?.rol === 'ADMINISTRADOR' && <RelojSidebar />}
 
         {/* User */}
         <Box p={8} style={{ borderTop: '1px solid #1e293b' }}>

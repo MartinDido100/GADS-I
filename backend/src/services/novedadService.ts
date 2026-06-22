@@ -10,6 +10,8 @@ export interface ListFilter {
   hasta?: string;
   origen?: OrigenNovedad;
   estado?: EstadoNovedad;
+  search?: string;
+  excluirDescripcion?: string;
 }
 
 function toUtcDate(dateStr: string, endOfDay = false): Date {
@@ -24,7 +26,39 @@ export function listNovedades(filter: ListFilter = {}) {
     hasta: filter.hasta ? toUtcDate(filter.hasta, true) : undefined,
     origen: filter.origen,
     estado: filter.estado,
+    search: filter.search,
   });
+}
+
+export interface ListPaginadoFilter extends ListFilter {
+  page: number;
+  pageSize: number;
+  sortBy: repo.SortableField;
+  sortDir: repo.SortDir;
+}
+
+export async function listNovedadesPaginado(filter: ListPaginadoFilter) {
+  const { total, items, stats } = await repo.findPaginated({
+    legajo: filter.legajo,
+    desde: filter.desde ? toUtcDate(filter.desde) : undefined,
+    hasta: filter.hasta ? toUtcDate(filter.hasta, true) : undefined,
+    origen: filter.origen,
+    estado: filter.estado,
+    search: filter.search,
+    excluirDescripcion: filter.excluirDescripcion,
+    page: filter.page,
+    pageSize: filter.pageSize,
+    sortBy: filter.sortBy,
+    sortDir: filter.sortDir,
+  });
+  return {
+    items,
+    total,
+    stats,
+    page: filter.page,
+    pageSize: filter.pageSize,
+    totalPages: Math.max(1, Math.ceil(total / filter.pageSize)),
+  };
 }
 
 export async function getNovedad(id: number) {

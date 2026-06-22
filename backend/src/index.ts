@@ -8,6 +8,7 @@ import { horarioRoutes, turnoRoutes } from './routes/horarioRoutes.js';
 import { fichadaRoutes } from './routes/fichadaRoutes.js';
 import { novedadRoutes, recalcularNovedadesRouter } from './routes/novedadRoutes.js';
 import { cierreRoutes } from './routes/cierreRoutes.js';
+import { demoRoutes } from './routes/demoRoutes.js';
 import { iniciarRecalculoDiario } from './lib/recalculoDiario.js';
 
 const app = express();
@@ -27,6 +28,7 @@ app.use('/fichadas', fichadaRoutes);
 app.use('/novedades', novedadRoutes);
 app.use('/empleados/:legajo/recalcular-novedades', recalcularNovedadesRouter);
 app.use('/cierres', cierreRoutes);
+app.use('/demo', demoRoutes);
 
 app.use(errorHandler);
 

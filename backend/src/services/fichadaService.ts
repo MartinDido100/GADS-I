@@ -3,6 +3,7 @@ import * as repo from '../repositories/fichadaRepository.js';
 import * as empleadoRepo from '../repositories/empleadoRepository.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { isoDateLocal } from '../lib/tz.js';
+import { now } from '../lib/clock.js';
 import { calcularNovedades } from './reglasService.js';
 
 // Recalcula las novedades automáticas del día (local) de la fichada.
@@ -109,7 +110,7 @@ export async function registrarAlmuerzo(legajo: number, tipo: EntradaSalida) {
 
   return repo.create({
     empleado: { connect: { legajo } },
-    timestamp: new Date(),
+    timestamp: now(),
     entrada_salida: tipo,
     origen: OrigenFichada.ALMUERZO,
     activo: true,
@@ -125,7 +126,7 @@ export async function registrarBiometrico(legajo: number) {
     throw new HttpError(400, 'EMPLEADO_INACTIVO', 'Empleado inactivo');
   }
 
-  const ahora = new Date();
+  const ahora = now();
   const ultima = await repo.findUltimaFichadaDelDia(legajo, ahora);
   const tipo: EntradaSalida = (!ultima || ultima.entrada_salida === 'S') ? 'E' : 'S';
 

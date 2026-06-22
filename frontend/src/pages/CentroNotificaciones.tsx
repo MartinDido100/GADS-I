@@ -10,10 +10,10 @@ import { listFichadas, fichadaAlmuerzo, createFichada, type Fichada } from '../l
 import { ApiError } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { RegistrarFichadaModal } from '../components/RegistrarFichadaModal';
+import { clientNow, nowIso } from '../lib/clock';
 
 function todayIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return nowIso();
 }
 
 // Retorna [inicioUTC, finUTC] para un día completo en la timezone local del cliente
@@ -108,7 +108,7 @@ function AlmuerzoPanel({ legajo, nombre, onFichado, isAdmin = false }: AlmuerzoB
       if (isAdmin) {
         await createFichada({
           id_empleado: legajo,
-          timestamp: new Date().toISOString(),
+          timestamp: clientNow().toISOString(),
           entrada_salida: tipo,
           origen: 'ALMUERZO',
         });
@@ -198,10 +198,11 @@ export function CentroNotificaciones() {
         filter.desde = desde;
         filter.hasta = hasta;
       } else if (rango === 'semana') {
-        const d = new Date();
+        const d = clientNow();
         d.setDate(d.getDate() - 7);
         d.setHours(0, 0, 0, 0);
         filter.desde = d.toISOString();
+        filter.hasta = clientNow().toISOString();
       }
       setFichadas(await listFichadas(filter));
     } catch (err) {
@@ -212,6 +213,14 @@ export function CentroNotificaciones() {
   }
 
   useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [rango]);
+
+  // Recargar cuando el reloj de demo cambia (las fichadas "de hoy" se mueven).
+  useEffect(() => {
+    const onClock = () => void load();
+    window.addEventListener('demo-clock-changed', onClock);
+    return () => window.removeEventListener('demo-clock-changed', onClock);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rango]);
 
   const filtered = useMemo(() => {
     if (!search) return fichadas;

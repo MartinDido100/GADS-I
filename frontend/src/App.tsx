@@ -7,6 +7,7 @@ import { CierreMensual } from './pages/CierreMensual';
 import { Justificativos } from './pages/Justificativos';
 import { Vacaciones } from './pages/Vacaciones';
 import { Perfil } from './pages/Perfil';
+import { RelojDemoPage } from './pages/RelojDemoPage';
 import { Login } from './pages/Login';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -49,6 +50,14 @@ function App() {
             element={
               <RequireAuth roles={['ADMINISTRADOR', 'CONTADOR']}>
                 <CierreMensual />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="reloj-demo"
+            element={
+              <RequireAuth roles={['ADMINISTRADOR']}>
+                <RelojDemoPage />
               </RequireAuth>
             }
           />

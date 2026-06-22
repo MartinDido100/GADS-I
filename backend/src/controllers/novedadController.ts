@@ -10,6 +10,13 @@ const listSchema = z.object({
   hasta:    z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   origen:   z.enum(['AUTOMATICA', 'MANUAL']).optional(),
   estado:   z.enum(['PENDIENTE', 'APROBADA', 'RECHAZADA']).optional(),
+  search:   z.string().trim().min(1).optional(),
+  excluir:  z.string().trim().min(1).optional(), // excluye tipos por descripción
+  // Paginación: si llega `page`, la respuesta es { items, total, page, ... }.
+  page:     z.coerce.number().int().positive().optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+  sortBy:   z.enum(['fecha', 'empleado', 'tipo', 'origen', 'estado']).optional(),
+  sortDir:  z.enum(['asc', 'desc']).optional(),
 });
 
 const crearSchema = z.object({
@@ -34,8 +41,20 @@ export async function list(req: Request, res: Response, next: NextFunction) {
     if (!query.success) throw new HttpError(400, 'INVALID_INPUT', query.error.issues[0]?.message ?? 'Input inválido');
 
     // EMPLEADO solo ve sus propias novedades.
-    const filter = { ...query.data };
+    const { excluir, ...rest } = query.data;
+    const filter = { ...rest, excluirDescripcion: excluir };
     if (req.user!.rol === 'EMPLEADO') filter.legajo = req.user!.legajo;
+
+    // Si llega `page`, respondemos paginado (con sort y search server-side).
+    if (filter.page !== undefined) {
+      return res.json(await service.listNovedadesPaginado({
+        ...filter,
+        page: filter.page,
+        pageSize: filter.pageSize ?? 20,
+        sortBy: filter.sortBy ?? 'fecha',
+        sortDir: filter.sortDir ?? 'desc',
+      }));
+    }
 
     res.json(await service.listNovedades(filter));
   } catch (e) { next(e); }
