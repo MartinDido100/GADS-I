@@ -19,3 +19,6 @@ fichadaRoutes.post('/almuerzo', ctrl.almuerzo);
 // Mutaciones manuales: solo administrador.
 fichadaRoutes.post('/', requireRole('ADMINISTRADOR'), ctrl.create);
 fichadaRoutes.post('/:id/corregir', requireRole('ADMINISTRADOR'), ctrl.corregir);
+
+// Demo/didáctico: vaciar (soft-delete) las fichadas de un empleado en un día.
+fichadaRoutes.post('/vaciar-dia', requireRole('ADMINISTRADOR'), ctrl.vaciarDia);

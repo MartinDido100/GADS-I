@@ -4,9 +4,9 @@ import {
   Table, ThemeIcon, SegmentedControl, TextInput, SimpleGrid,
 } from '@mantine/core';
 import {
-  Plus, AlertCircle, LogIn, LogOut, Bell, Search, Calendar, UtensilsCrossed,
+  Plus, AlertCircle, LogIn, LogOut, Bell, Search, Calendar, UtensilsCrossed, Trash2,
 } from 'lucide-react';
-import { listFichadas, fichadaAlmuerzo, createFichada, type Fichada } from '../lib/fichadasApi';
+import { listFichadas, fichadaAlmuerzo, createFichada, vaciarDiaFichadas, type Fichada } from '../lib/fichadasApi';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { RegistrarFichadaModal } from '../components/RegistrarFichadaModal';
@@ -212,6 +212,35 @@ export function CentroNotificaciones() {
     }
   }
 
+  const [vaciando, setVaciando] = useState(false);
+
+  // Demo/didáctico: vacía las fichadas de un empleado en el día actual para
+  // poder repetir flujos sobre el mismo día sin acumular fichadas viejas.
+  async function vaciarDiaEmpleado() {
+    const input = window.prompt('Legajo del empleado cuyo día querés vaciar (hoy):');
+    if (!input) return;
+    const legajo = Number(input.trim());
+    if (!Number.isInteger(legajo) || legajo <= 0) {
+      setError('Legajo inválido');
+      return;
+    }
+    if (!window.confirm(`¿Vaciar TODAS las fichadas de hoy del legajo ${legajo}? (se marcan inactivas, no se borran)`)) {
+      return;
+    }
+    setVaciando(true);
+    setError(null);
+    try {
+      const r = await vaciarDiaFichadas(legajo, todayIso());
+      setError(null);
+      await load();
+      window.alert(`Listo: se vaciaron ${r.fichadasVaciadas} fichada(s) del legajo ${legajo} (${r.dia}).`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Error al vaciar el día');
+    } finally {
+      setVaciando(false);
+    }
+  }
+
   useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [rango]);
 
   // Recargar cuando el reloj de demo cambia (las fichadas "de hoy" se mueven).
@@ -254,9 +283,20 @@ export function CentroNotificaciones() {
           </Text>
         </Box>
         {isAdmin && (
-          <Button color="red" leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>
-            Registrar fichada
-          </Button>
+          <Group gap="sm">
+            <Button
+              variant="light"
+              color="gray"
+              leftSection={<Trash2 size={16} />}
+              loading={vaciando}
+              onClick={() => void vaciarDiaEmpleado()}
+            >
+              Vaciar día (demo)
+            </Button>
+            <Button color="red" leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>
+              Registrar fichada
+            </Button>
+          </Group>
         )}
       </Group>
 

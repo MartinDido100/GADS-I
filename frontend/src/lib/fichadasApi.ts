@@ -65,3 +65,12 @@ export function corregirFichada(id: number, input: { timestamp: string; entrada_
     body: JSON.stringify(input),
   });
 }
+
+// Demo/didáctico (solo admin): vacía las fichadas de un empleado en un día.
+// `dia` opcional (YYYY-MM-DD); si se omite, el backend usa el día del reloj.
+export function vaciarDiaFichadas(legajo: number, dia?: string) {
+  return api<{ legajo: number; dia: string; fichadasVaciadas: number }>('/fichadas/vaciar-dia', {
+    method: 'POST',
+    body: JSON.stringify({ legajo, ...(dia && { dia }) }),
+  });
+}

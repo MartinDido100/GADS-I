@@ -50,6 +50,25 @@ export function marcarInactiva(identidad: number) {
   });
 }
 
+/**
+ * Soft-delete masivo: marca activo:false todas las fichadas activas de un
+ * empleado dentro del rango [desde, hasta]. Respeta la inmutabilidad de la
+ * fichada (no borra filas). Devuelve la cantidad afectada.
+ *
+ * Uso didáctico (demo): vaciar el día de un empleado para reproducir flujos
+ * sobre el mismo día sin perder el historial.
+ */
+export function desactivarPorEmpleadoYRango(legajo: number, desde: Date, hasta: Date) {
+  return prisma.fichada.updateMany({
+    where: {
+      id_empleado: legajo,
+      activo: true,
+      timestamp: { gte: desde, lte: hasta },
+    },
+    data: { activo: false },
+  });
+}
+
 export function findUltimaFichadaDelDia(legajo: number, fecha: Date) {
   const inicio = new Date(fecha);
   inicio.setHours(0, 0, 0, 0);
