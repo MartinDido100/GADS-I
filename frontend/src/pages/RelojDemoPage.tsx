@@ -77,8 +77,8 @@ export function RelojDemoPage() {
     setLoading(true);
     setError(null);
     try {
-      // El input datetime-local da hora local sin zona; el backend la interpreta
-      // como hora local del negocio.
+      // El input datetime-local da hora local (UTC-3) sin zona. El backend la
+      // interpreta como hora local del negocio y la convierte al UTC real.
       aplicar(await setClockApi(fechaManual));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Error al fijar el reloj');
