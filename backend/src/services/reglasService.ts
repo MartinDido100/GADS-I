@@ -5,9 +5,10 @@ import * as novedadRepo from '../repositories/novedadRepository.js';
 import * as turnoRepo from '../repositories/turnoRepository.js';
 
 // Mapa canónico: descripción del seed → clave interna usada en el motor.
+// Los nombres DEBEN coincidir exactamente con TipoNovedad.descripcion en la DB.
 const TIPO_KEY = {
-  TARDANZA:         'Tardanza',
-  AUSENCIA:         'Ausencia',
+  TARDANZA:         'Tardanza injustificada',
+  AUSENCIA:         'Ausencia injustificada',
   HE_50:            'Horas extra al 50%',
   HE_100:           'Horas extra al 100%',
   SALIDA_ANTICI:    'Salida anticipada',
@@ -132,6 +133,22 @@ export async function calcularNovedades(
   const dias = diasEnRango(desde, hasta);
   const novedadesACrear: novedadRepo.NovedadCreateData[] = [];
 
+  // Agrega una novedad resolviendo el tipo de forma segura. Si la descripción
+  // no existe en la DB (desajuste seed↔motor), NO crashea: registra el faltante
+  // en `detalle` y saltea esa novedad. Evita el 500 por `tipo_novedad: undefined`.
+  function pushNovedad(
+    tipoDescripcion: string,
+    data: Omit<novedadRepo.NovedadCreateData, 'tipo_novedad'>,
+  ): boolean {
+    const id = tipos[tipoDescripcion];
+    if (id === undefined) {
+      detalle.push(`⚠ tipo de novedad faltante en DB: "${tipoDescripcion}" — novedad omitida`);
+      return false;
+    }
+    novedadesACrear.push({ ...data, tipo_novedad: id });
+    return true;
+  }
+
   for (const dia of dias) {
     const isoKey = dia.toISOString().slice(0, 10);
     const diaSemana = DIA_MAP[dia.getUTCDay()]!;
@@ -181,10 +198,9 @@ export async function calcularNovedades(
 
     // ── Ausencia ────────────────────────────────────────────────────────
     if (!primerEntrada) {
-      novedadesACrear.push({
+      pushNovedad(TIPO_KEY.AUSENCIA, {
         id_empleado: legajo,
         fecha: dia,
-        tipo_novedad: tipos[TIPO_KEY.AUSENCIA]!,
         origen: OrigenNovedad.AUTOMATICA,
         observacion: `Sin fichada de entrada el ${isoKey} (día laboral: ${diaSemana})`,
       });
@@ -206,10 +222,9 @@ export async function calcularNovedades(
     if (fueraDeVentana) {
       const entradaStr = horaLocal(primerEntrada.timestamp);
       const salidaStr  = ultimaSalida ? horaLocal(ultimaSalida.timestamp) : '—';
-      novedadesACrear.push({
+      pushNovedad(TIPO_KEY.CAMBIO_HORARIO, {
         id_empleado: legajo,
         fecha: dia,
-        tipo_novedad: tipos[TIPO_KEY.CAMBIO_HORARIO]!,
         origen: OrigenNovedad.AUTOMATICA,
         observacion: `Fichada fuera de ventana: ${entradaStr}–${salidaStr} (horario asignado: ${horario.horario_entrada}–${horario.horario_retiro})`,
       });
@@ -221,10 +236,9 @@ export async function calcularNovedades(
     // Entrada anticipada (antes del horario) no genera novedad
     if (minEntradaReal > minutosEntrada + tolEntrada) {
       const tardanzaMin = minEntradaReal - minutosEntrada;
-      novedadesACrear.push({
+      pushNovedad(TIPO_KEY.TARDANZA, {
         id_empleado: legajo,
         fecha: dia,
-        tipo_novedad: tipos[TIPO_KEY.TARDANZA]!,
         origen: OrigenNovedad.AUTOMATICA,
         observacion: `Entrada a las ${horaLocal(primerEntrada.timestamp)} — ${tardanzaMin} min de tardanza`,
       });
@@ -242,10 +256,9 @@ export async function calcularNovedades(
       if (actual.entrada_salida !== 'S' || siguiente.entrada_salida !== 'E') continue;
       const pausaMin = Math.round(diffMinutos(actual.timestamp, siguiente.timestamp));
       if (pausaMin < 1) continue;
-      novedadesACrear.push({
+      pushNovedad(TIPO_KEY.SALIDA_PARCIAL, {
         id_empleado: legajo,
         fecha: dia,
-        tipo_novedad: tipos[TIPO_KEY.SALIDA_PARCIAL]!,
         origen: OrigenNovedad.AUTOMATICA,
         observacion: `Salida parcial de ${horaLocal(actual.timestamp)} a ${horaLocal(siguiente.timestamp)} — ${pausaMin} min`,
       });
@@ -262,10 +275,9 @@ export async function calcularNovedades(
       // Salida anticipada
       if (minSalidaReal < minutosRetiro - tolRetiro) {
         const anticipo = minutosRetiro - minSalidaReal;
-        novedadesACrear.push({
+        pushNovedad(TIPO_KEY.SALIDA_ANTICI, {
           id_empleado: legajo,
           fecha: dia,
-          tipo_novedad: tipos[TIPO_KEY.SALIDA_ANTICI]!,
           origen: OrigenNovedad.AUTOMATICA,
           observacion: `Salida a las ${horaLocal(ultimaSalida.timestamp)} — ${anticipo} min anticipado`,
         });
@@ -277,10 +289,9 @@ export async function calcularNovedades(
       if (umbralHE > 0 && minSalidaReal > minutosRetiro + umbralHE) {
         const minutosExtra = minSalidaReal - minutosRetiro;
         const tipoHE = esFinDeSemana ? TIPO_KEY.HE_100 : TIPO_KEY.HE_50;
-        novedadesACrear.push({
+        pushNovedad(tipoHE, {
           id_empleado: legajo,
           fecha: dia,
-          tipo_novedad: tipos[tipoHE]!,
           origen: OrigenNovedad.AUTOMATICA,
           observacion: `${minutosExtra} min extra (${esFinDeSemana ? '100%' : '50%'})`,
         });
