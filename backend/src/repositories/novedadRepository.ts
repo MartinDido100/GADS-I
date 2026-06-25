@@ -170,6 +170,17 @@ export function deleteAutosByEmpleadoYPeriodo(legajo: number, desde: Date, hasta
   });
 }
 
+// Demo/didáctico: borra TODAS las novedades automáticas del período, de todos
+// los empleados (cualquier estado). Usado por el "reseteo de cero" de la demo.
+export function deleteAutosByPeriodo(desde: Date, hasta: Date) {
+  return prisma.novedad.deleteMany({
+    where: {
+      origen: OrigenNovedad.AUTOMATICA,
+      fecha: { gte: desde, lte: hasta },
+    },
+  });
+}
+
 export function listTiposNovedad() {
   return prisma.tipoNovedad.findMany({ orderBy: { id_tipo_novedad: 'asc' } });
 }

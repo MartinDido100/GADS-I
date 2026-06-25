@@ -1,10 +1,19 @@
 import { EntradaSalida, OrigenFichada } from '@prisma/client';
 import * as repo from '../repositories/fichadaRepository.js';
 import * as empleadoRepo from '../repositories/empleadoRepository.js';
+import * as novedadRepo from '../repositories/novedadRepository.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { isoDateLocal, TZ_OFFSET_MIN } from '../lib/tz.js';
 import { now } from '../lib/clock.js';
 import { calcularNovedades } from './reglasService.js';
+
+// Rango UTC [00:00, 23:59:59.999] de un día local del negocio. Una fichada a las
+// 00:00 locales cae a las -TZ_OFFSET en UTC.
+function rangoUtcDiaLocal(diaIso: string): { inicio: Date; fin: Date } {
+  const inicio = new Date(new Date(`${diaIso}T00:00:00.000Z`).getTime() - TZ_OFFSET_MIN * 60_000);
+  const fin = new Date(new Date(`${diaIso}T23:59:59.999Z`).getTime() - TZ_OFFSET_MIN * 60_000);
+  return { inicio, fin };
+}
 
 // Recalcula las novedades automáticas del día (local) de la fichada.
 // Nunca falla hacia afuera: un error de recálculo no debe romper el fichaje.
@@ -173,29 +182,27 @@ export async function corregirFichada(
 }
 
 /**
- * Vacía (soft-delete) todas las fichadas de un empleado en un día local y
- * recalcula sus novedades. Herramienta DIDÁCTICA para la demo: permite repetir
- * flujos sobre el mismo día y empleado sin romper la inmutabilidad de la fichada
- * (las filas quedan, solo se marcan activo:false). Devuelve cuántas se vaciaron.
+ * Resetea un día a cero, como si no hubiera pasado nada. Herramienta DIDÁCTICA
+ * para la demo: para TODOS los empleados, en un día local:
+ *   1. Vacía (soft-delete) las fichadas activas del día — respeta inmutabilidad.
+ *   2. Borra las novedades AUTOMÁTICAS del día (sin regenerar: día limpio).
+ *
+ * No toca novedades MANUALES (las cargadas por el usuario se conservan).
  *
  * @param diaIso fecha local YYYY-MM-DD; si se omite, usa el día del reloj actual.
  */
-export async function vaciarDia(legajo: number, diaIso?: string) {
-  const empleado = await empleadoRepo.findByLegajo(legajo);
-  if (!empleado) throw new HttpError(404, 'NOT_FOUND', 'Empleado no encontrado');
-
+export async function resetearDia(diaIso?: string) {
   const dia = diaIso ?? isoDateLocal(now());
+  const { inicio, fin } = rangoUtcDiaLocal(dia);
 
-  // Rango UTC que cubre el día local [00:00, 23:59:59.999] del negocio.
-  // Una fichada a las 00:00 locales cae a las -TZ_OFFSET en UTC.
-  const inicioUtc = new Date(new Date(`${dia}T00:00:00.000Z`).getTime() - TZ_OFFSET_MIN * 60_000);
-  const finUtc = new Date(new Date(`${dia}T23:59:59.999Z`).getTime() - TZ_OFFSET_MIN * 60_000);
+  // 1. Soft-delete de todas las fichadas del día.
+  const { count: fichadasVaciadas } = await repo.desactivarTodosPorRango(inicio, fin);
 
-  const { count } = await repo.desactivarPorEmpleadoYRango(legajo, inicioUtc, finUtc);
+  // 2. Borrar las novedades automáticas del día. El motor las indexa por
+  //    `fecha` (medianoche UTC del día), así que usamos ese rango.
+  const fechaInicio = new Date(`${dia}T00:00:00.000Z`);
+  const fechaFin = new Date(`${dia}T23:59:59.999Z`);
+  const { count: novedadesBorradas } = await novedadRepo.deleteAutosByPeriodo(fechaInicio, fechaFin);
 
-  // Sin fichadas activas, el motor regenera (o limpia) las novedades del día.
-  const diaUtc = new Date(`${dia}T00:00:00Z`);
-  await calcularNovedades(legajo, diaUtc, diaUtc);
-
-  return { legajo, dia, fichadasVaciadas: count };
+  return { dia, fichadasVaciadas, novedadesBorradas };
 }

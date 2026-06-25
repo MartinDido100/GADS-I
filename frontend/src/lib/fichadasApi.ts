@@ -66,11 +66,11 @@ export function corregirFichada(id: number, input: { timestamp: string; entrada_
   });
 }
 
-// Demo/didáctico (solo admin): vacía las fichadas de un empleado en un día.
-// `dia` opcional (YYYY-MM-DD); si se omite, el backend usa el día del reloj.
-export function vaciarDiaFichadas(legajo: number, dia?: string) {
-  return api<{ legajo: number; dia: string; fichadasVaciadas: number }>('/fichadas/vaciar-dia', {
+// Demo/didáctico (solo admin): resetea el día a cero para TODOS los empleados —
+// vacía fichadas y borra novedades automáticas. `dia` opcional (YYYY-MM-DD).
+export function resetearDia(dia?: string) {
+  return api<{ dia: string; fichadasVaciadas: number; novedadesBorradas: number }>('/fichadas/resetear-dia', {
     method: 'POST',
-    body: JSON.stringify({ legajo, ...(dia && { dia }) }),
+    body: JSON.stringify(dia ? { dia } : {}),
   });
 }

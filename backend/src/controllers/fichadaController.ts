@@ -110,20 +110,19 @@ export const biometrico: RequestHandler = async (req, res, next) => {
   }
 };
 
-const vaciarDiaSchema = z.object({
-  legajo: z.coerce.number().int().positive(),
+const resetearDiaSchema = z.object({
   dia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
-// Herramienta didáctica (solo admin): vacía las fichadas de un empleado en un
-// día para repetir flujos de demo sobre el mismo día. Soft-delete, no borra.
-export const vaciarDia: RequestHandler = async (req, res, next) => {
-  const parsed = vaciarDiaSchema.safeParse(req.body);
+// Herramienta didáctica (solo admin): resetea el día a cero para TODOS los
+// empleados — vacía fichadas (soft-delete) y borra novedades automáticas.
+export const resetearDia: RequestHandler = async (req, res, next) => {
+  const parsed = resetearDiaSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
-    return next(new HttpError(400, 'INVALID_INPUT', 'legajo requerido (dia opcional YYYY-MM-DD)'));
+    return next(new HttpError(400, 'INVALID_INPUT', 'dia opcional con formato YYYY-MM-DD'));
   }
   try {
-    const result = await fichadaService.vaciarDia(parsed.data.legajo, parsed.data.dia);
+    const result = await fichadaService.resetearDia(parsed.data.dia);
     res.json(result);
   } catch (err) {
     next(err);

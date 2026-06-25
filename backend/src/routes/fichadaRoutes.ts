@@ -20,5 +20,6 @@ fichadaRoutes.post('/almuerzo', ctrl.almuerzo);
 fichadaRoutes.post('/', requireRole('ADMINISTRADOR'), ctrl.create);
 fichadaRoutes.post('/:id/corregir', requireRole('ADMINISTRADOR'), ctrl.corregir);
 
-// Demo/didáctico: vaciar (soft-delete) las fichadas de un empleado en un día.
-fichadaRoutes.post('/vaciar-dia', requireRole('ADMINISTRADOR'), ctrl.vaciarDia);
+// Demo/didáctico: resetear el día a cero (todos los empleados): vacía fichadas
+// (soft-delete) y borra novedades automáticas.
+fichadaRoutes.post('/resetear-dia', requireRole('ADMINISTRADOR'), ctrl.resetearDia);
