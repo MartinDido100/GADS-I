@@ -240,9 +240,11 @@ export function CentroNotificaciones() {
   }, [rango]);
 
   const filtered = useMemo(() => {
-    if (!search) return fichadas;
+    // Solo fichadas activas: las inactivas (corregidas/reseteadas) no se listan.
+    const activas = fichadas.filter((f) => f.activo);
+    if (!search) return activas;
     const s = search.toLowerCase();
-    return fichadas.filter((f) =>
+    return activas.filter((f) =>
       f.empleado.nombre.toLowerCase().includes(s) ||
       String(f.empleado.legajo).includes(s)
     );
